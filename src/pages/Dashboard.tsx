@@ -23,7 +23,7 @@ const Dashboard: React.FC = () => {
       navigate('/login');
       return;
     }
-    
+
     fetchData();
   }, [user, navigate]);
 
@@ -169,7 +169,7 @@ const Dashboard: React.FC = () => {
     <div className="container">
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ color: '#1f2937', marginBottom: '1rem' }}>Your Family Tree</h1>
-        
+
         {error && (
           <div className="alert alert-error">
             {error}
@@ -177,35 +177,35 @@ const Dashboard: React.FC = () => {
         )}
 
         <div style={{ marginBottom: '2rem' }}>
-          <button 
+          <button
             onClick={() => {
               setShowAddMemberForm(true);
               setSelectedFamilyMember(null); // Ensure no member is selected when adding a new one
-            }} 
+            }}
             className="btn btn-primary"
             style={{ marginRight: '10px' }}
           >
             Add New Family Member
           </button>
-          
+
           {selectedFamilyMember && (
             <>
-              <button 
-                onClick={() => setShowAddRelationFormMode('add_new_related')} 
+              <button
+                onClick={() => setShowAddRelationFormMode('add_new_related')}
                 className="btn btn-secondary"
                 style={{ marginRight: '10px' }}
               >
                 Add Related Member to {selectedFamilyMember.first_name}
               </button>
-              <button 
-                onClick={() => setShowAddRelationFormMode('add_existing_relation')} 
+              <button
+                onClick={() => setShowAddRelationFormMode('add_existing_relation')}
                 className="btn btn-secondary"
                 style={{ marginRight: '10px' }}
               >
                 Add Existing Relationship to {selectedFamilyMember.first_name}
               </button>
-              <button 
-                onClick={() => setSelectedFamilyMember(null)} 
+              <button
+                onClick={() => setSelectedFamilyMember(null)}
                 className="btn btn-info"
               >
                 Clear Selection
@@ -218,8 +218,8 @@ const Dashboard: React.FC = () => {
           <div className="card">
             <h3>Welcome to your Family Tree!</h3>
             <p>Start by adding your first family member. You can add yourself, a parent, or any family member you'd like to begin with.</p>
-            <button 
-              onClick={() => setShowAddMemberForm(true)} 
+            <button
+              onClick={() => setShowAddMemberForm(true)}
               className="btn btn-primary"
             >
               Add Your First Family Member
@@ -227,7 +227,7 @@ const Dashboard: React.FC = () => {
           </div>
         ) : (
           <div className="card">
-            <FamilyTree 
+            <FamilyTree
               familyMembers={familyMembers}
               relationships={relationships}
               onDeleteMember={handleDeleteMember}
@@ -243,9 +243,9 @@ const Dashboard: React.FC = () => {
             <h3>Family Members ({familyMembers.length})</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1rem' }}>
               {familyMembers.map(member => (
-                <div key={member.id} style={{ 
-                  padding: '1rem', 
-                  border: '1px solid #e5e7eb', 
+                <div key={member.id} style={{
+                  padding: '1rem',
+                  border: '1px solid #e5e7eb',
                   borderRadius: '8px',
                   background: '#f9fafb'
                 }}>
@@ -260,7 +260,7 @@ const Dashboard: React.FC = () => {
                       Born: {new Date(member.birth_date).toLocaleDateString()}
                     </p>
                   )}
-                  <button 
+                  <button
                     onClick={() => handleDeleteMember(member.id)}
                     className="btn btn-danger"
                     style={{ marginTop: '0.5rem', padding: '5px 10px', fontSize: '0.8rem' }}
@@ -275,28 +275,28 @@ const Dashboard: React.FC = () => {
       </div>
 
       {showAddMemberForm && (
-        <div style={{ 
-          position: 'fixed', 
-          top: 0, 
-          left: 0, 
-          right: 0, 
-          bottom: 0, 
-          backgroundColor: 'rgba(0,0,0,0.5)', 
-          display: 'flex', 
-          alignItems: 'center', 
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
           justifyContent: 'center',
           zIndex: 1000
         }}>
-          <div style={{ 
-            backgroundColor: 'white', 
-            padding: '2rem', 
-            borderRadius: '10px', 
-            maxWidth: '500px', 
+          <div style={{
+            backgroundColor: 'white',
+            padding: '2rem',
+            borderRadius: '10px',
+            maxWidth: '500px',
             width: '90%',
             maxHeight: '90vh',
             overflow: 'auto'
           }}>
-            <AddFamilyMemberForm 
+            <AddFamilyMemberForm
               onMemberAdded={handleMemberAdded}
               onCancel={() => setShowAddMemberForm(false)}
             />
@@ -305,29 +305,29 @@ const Dashboard: React.FC = () => {
       )}
 
       {showAddRelationFormMode !== 'none' && (
-        <div style={{ 
-          position: 'fixed', 
-          top: 0, 
-          left: 0, 
-          right: 0, 
-          bottom: 0, 
-          backgroundColor: 'rgba(0,0,0,0.5)', 
-          display: 'flex', 
-          alignItems: 'center', 
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
           justifyContent: 'center',
           zIndex: 1000
         }}>
-          <div style={{ 
-            backgroundColor: 'white', 
-            padding: '2rem', 
-            borderRadius: '10px', 
-            maxWidth: '500px', 
+          <div style={{
+            backgroundColor: 'white',
+            padding: '2rem',
+            borderRadius: '10px',
+            maxWidth: '500px',
             width: '90%',
             maxHeight: '90vh',
             overflow: 'auto'
           }}>
             {showAddRelationFormMode === 'add_new_related' && selectedFamilyMember && (
-              <AddRelationForm 
+              <AddRelationForm
                 mode="add_new_related"
                 selectedFamilyMember={selectedFamilyMember}
                 onRelationAdded={handleRelationAdded}
@@ -335,7 +335,7 @@ const Dashboard: React.FC = () => {
               />
             )}
             {showAddRelationFormMode === 'add_existing_relation' && selectedFamilyMember && (
-              <AddRelationForm 
+              <AddRelationForm
                 mode="add_existing_relation"
                 familyMembers={familyMembers}
                 existingRelationships={relationships}
