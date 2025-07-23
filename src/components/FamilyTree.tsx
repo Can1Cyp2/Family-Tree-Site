@@ -7,6 +7,7 @@ interface FamilyTreeProps {
   onDeleteMember: (memberId: string) => void;
   onSelectMember: (member: FamilyMember) => void;
   selectedMember: FamilyMember | null;
+  onDeleteRelationship: (relationshipId: string) => void;
 }
 
 const FamilyTree: React.FC<FamilyTreeProps> = ({
@@ -14,7 +15,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   relationships,
   onDeleteMember,
   onSelectMember,
-  selectedMember: propSelectedMember
+  selectedMember: propSelectedMember,
+  onDeleteRelationship
 }) => {
   const [selectedMember, setSelectedMember] = useState<string | null>(propSelectedMember?.id || null);
   const [focusedMember, setFocusedMember] = useState<string | null>(null);
@@ -22,10 +24,10 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   // Build relationship maps
   const relationshipMap = useMemo(() => {
     const map = new Map<string, {
-      parents: FamilyMember[];
-      children: FamilyMember[];
-      spouses: FamilyMember[];
-      siblings: FamilyMember[];
+      parents: { member: FamilyMember; relationship: Relationship }[];
+      children: { member: FamilyMember; relationship: Relationship }[];
+      spouses: { member: FamilyMember; relationship: Relationship }[];
+      siblings: { member: FamilyMember; relationship: Relationship }[];
     }>();
 
     // Initialize all members
@@ -50,34 +52,33 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
       switch (rel.relationship_type) {
         case 'parent':
-          if (!person1Relations.children.find(c => c.id === person2.id)) {
-            person1Relations.children.push(person2);
+          if (!person1Relations.children.find(c => c.member.id === person2.id)) {
+            person1Relations.children.push({ member: person2, relationship: rel });
           }
-          if (!person2Relations.parents.find(p => p.id === person1.id)) {
-            person2Relations.parents.push(person1);
+          if (!person2Relations.parents.find(p => p.member.id === person1.id)) {
+            person2Relations.parents.push({ member: person1, relationship: rel });
           }
           break;
         case 'child':
-          if (!person1Relations.parents.find(p => p.id === person2.id)) {
-            person1Relations.parents.push(person2);
+          if (!person1Relations.parents.find(p => p.member.id === person2.id)) {
+            person1Relations.parents.push({ member: person2, relationship: rel });
           }
-          if (!person2Relations.children.find(c => c.id === person1.id)) {
-            person2Relations.children.push(person1);
+          if (!person2Relations.children.find(c => c.member.id === person1.id)) {
+            person2Relations.children.push({ member: person1, relationship: rel });
           }
           break;
         case 'spouse':
-          if (!person1Relations.spouses.find(s => s.id === person2.id)) {
-            person1Relations.spouses.push(person2);
+          if (!person1Relations.spouses.find(s => s.member.id === person2.id)) {
+            person1Relations.spouses.push({ member: person2, relationship: rel });
           }
           break;
         case 'sibling':
-          if (!person1Relations.siblings.find(s => s.id === person2.id)) {
-            person1Relations.siblings.push(person2);
+          if (!person1Relations.siblings.find(s => s.member.id === person2.id)) {
+            person1Relations.siblings.push({ member: person2, relationship: rel });
           }
-          if (!person2Relations.siblings.find(s => s.id === person1.id)) {
-            person2Relations.siblings.push(person1);
+          if (!person2Relations.siblings.find(s => s.member.id === person1.id)) {
+            person2Relations.siblings.push({ member: person1, relationship: rel });
           }
-          break;
       }
     });
 
@@ -129,8 +130,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         const relations = relationshipMap.get(member.id);
         if (relations) {
           relations.children.forEach(child => {
-            if (!visited.has(child.id)) {
-              queue.push({ member: child, generation: generation + 1 });
+            if (!visited.has(child.member.id)) {
+              queue.push({ member: child.member, generation: generation + 1 });
             }
           });
         }
@@ -221,8 +222,11 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                     <h6>Parents:</h6>
                     {relations.parents.length > 0 ? (
                       <ul>
-                        {relations.parents.map(p => (
-                          <li key={p.id}>{p.first_name} {p.last_name}</li>
+                        {relations.parents.map(({ member: p, relationship: rel }) => (
+                          <li key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span onClick={() => onSelectMember(p)} style={{ cursor: 'pointer', textDecoration: 'underline' }}>{p.first_name} {p.last_name}</span>
+                            <button onClick={() => onDeleteRelationship(rel.id)} className="btn btn-sm btn-danger" style={{ marginLeft: '10px' }}>Delete</button>
+                          </li>
                         ))}
                       </ul>
                     ) : (
@@ -232,8 +236,11 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                     <h6>Spouses:</h6>
                     {relations.spouses.length > 0 ? (
                       <ul>
-                        {relations.spouses.map(s => (
-                          <li key={s.id}>{s.first_name} {s.last_name}</li>
+                        {relations.spouses.map(({ member: s, relationship: rel }) => (
+                          <li key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span onClick={() => onSelectMember(s)} style={{ cursor: 'pointer', textDecoration: 'underline' }}>{s.first_name} {s.last_name}</span>
+                            <button onClick={() => onDeleteRelationship(rel.id)} className="btn btn-sm btn-danger" style={{ marginLeft: '10px' }}>Delete</button>
+                          </li>
                         ))}
                       </ul>
                     ) : (
@@ -243,8 +250,11 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                     <h6>Children:</h6>
                     {relations.children.length > 0 ? (
                       <ul>
-                        {relations.children.map(c => (
-                          <li key={c.id}>{c.first_name} {c.last_name}</li>
+                        {relations.children.map(({ member: c, relationship: rel }) => (
+                          <li key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span onClick={() => onSelectMember(c)} style={{ cursor: 'pointer', textDecoration: 'underline' }}>{c.first_name} {c.last_name}</span>
+                            <button onClick={() => onDeleteRelationship(rel.id)} className="btn btn-sm btn-danger" style={{ marginLeft: '10px' }}>Delete</button>
+                          </li>
                         ))}
                       </ul>
                     ) : (
@@ -254,8 +264,11 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                     <h6>Siblings:</h6>
                     {relations.siblings.length > 0 ? (
                       <ul style={{ borderTop: '1px solid #e5e7eb', paddingTop: '1rem', marginTop: '1rem' }}>
-                        {relations.siblings.map(s => (
-                          <li key={s.id}>{s.first_name} {s.last_name}</li>
+                        {relations.siblings.map(({ member: s, relationship: rel }) => (
+                          <li key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span onClick={() => onSelectMember(s)} style={{ cursor: 'pointer', textDecoration: 'underline' }}>{s.first_name} {s.last_name}</span>
+                            <button onClick={() => onDeleteRelationship(rel.id)} className="btn btn-sm btn-danger" style={{ marginLeft: '10px' }}>Delete</button>
+                          </li>
                         ))}
                       </ul>
                     ) : (

@@ -15,7 +15,7 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showAddMemberForm, setShowAddMemberForm] = useState(false);
-  const [showAddRelationForm, setShowAddRelationForm] = useState(false);
+  const [showAddRelationFormMode, setShowAddRelationFormMode] = useState<'none' | 'add_new_related' | 'add_existing_relation'>('none');
   const [selectedFamilyMember, setSelectedFamilyMember] = useState<FamilyMember | null>(null);
 
   useEffect(() => {
@@ -66,11 +66,10 @@ const Dashboard: React.FC = () => {
     setSelectedFamilyMember(null); // Clear selection after adding a member
   };
 
-  const handleRelationAdded = (newMember: FamilyMember) => {
-    // After adding a new member and their relation, re-fetch all data
-    // to ensure the tree is updated with the new member and relationships.
+  const handleRelationAdded = (data: FamilyMember | Relationship) => {
+    // After adding a new member/relation, re-fetch all data
     fetchData();
-    setShowAddRelationForm(false);
+    setShowAddRelationFormMode('none');
     setSelectedFamilyMember(null); // Clear selection after adding a relation
   };
 
@@ -123,6 +122,37 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleDeleteRelationship = async (relationshipId: string) => {
+    if (!user || !user.id) {
+      setError('User not logged in or user ID not available.');
+      console.error('Deletion failed: User not logged in or user ID not available.');
+      return;
+    }
+
+    if (!window.confirm('Are you sure you want to delete this relationship?')) {
+      return;
+    }
+
+    try {
+      console.log(`Attempting to delete relationship ${relationshipId} for user ${user.id}`);
+      const { error: deleteError } = await supabase
+        .from('relationships')
+        .delete()
+        .eq('id', relationshipId)
+        .eq('user_id', user.id);
+
+      if (deleteError) {
+        console.error('Error deleting relationship:', deleteError);
+        throw deleteError;
+      }
+      console.log('Relationship deleted successfully.');
+      fetchData(); // Re-fetch all data to update the tree
+    } catch (error: any) {
+      console.error('Caught error during relationship deletion process:', error);
+      setError(error.message || 'Failed to delete relationship.');
+    }
+  };
+
   if (!user) {
     return null;
   }
@@ -161,11 +191,18 @@ const Dashboard: React.FC = () => {
           {selectedFamilyMember && (
             <>
               <button 
-                onClick={() => setShowAddRelationForm(true)} 
+                onClick={() => setShowAddRelationFormMode('add_new_related')} 
                 className="btn btn-secondary"
                 style={{ marginRight: '10px' }}
               >
                 Add Related Member to {selectedFamilyMember.first_name}
+              </button>
+              <button 
+                onClick={() => setShowAddRelationFormMode('add_existing_relation')} 
+                className="btn btn-secondary"
+                style={{ marginRight: '10px' }}
+              >
+                Add Existing Relationship to {selectedFamilyMember.first_name}
               </button>
               <button 
                 onClick={() => setSelectedFamilyMember(null)} 
@@ -196,6 +233,7 @@ const Dashboard: React.FC = () => {
               onDeleteMember={handleDeleteMember}
               onSelectMember={setSelectedFamilyMember}
               selectedMember={selectedFamilyMember}
+              onDeleteRelationship={handleDeleteRelationship}
             />
           </div>
         )}
@@ -266,7 +304,7 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {showAddRelationForm && selectedFamilyMember && (
+      {showAddRelationFormMode !== 'none' && (
         <div style={{ 
           position: 'fixed', 
           top: 0, 
@@ -288,11 +326,24 @@ const Dashboard: React.FC = () => {
             maxHeight: '90vh',
             overflow: 'auto'
           }}>
-            <AddRelationForm 
-              selectedFamilyMember={selectedFamilyMember}
-              onRelationAdded={handleRelationAdded}
-              onCancel={() => setShowAddRelationForm(false)}
-            />
+            {showAddRelationFormMode === 'add_new_related' && selectedFamilyMember && (
+              <AddRelationForm 
+                mode="add_new_related"
+                selectedFamilyMember={selectedFamilyMember}
+                onRelationAdded={handleRelationAdded}
+                onCancel={() => setShowAddRelationFormMode('none')}
+              />
+            )}
+            {showAddRelationFormMode === 'add_existing_relation' && selectedFamilyMember && (
+              <AddRelationForm 
+                mode="add_existing_relation"
+                familyMembers={familyMembers}
+                existingRelationships={relationships}
+                selectedFamilyMember={selectedFamilyMember}
+                onRelationAdded={handleRelationAdded}
+                onCancel={() => setShowAddRelationFormMode('none')}
+              />
+            )}
           </div>
         </div>
       )}
