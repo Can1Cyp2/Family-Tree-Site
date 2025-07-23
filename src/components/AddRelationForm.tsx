@@ -33,7 +33,7 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
   const [newRelatedRelationshipType, setNewRelatedRelationshipType] = useState<'' | 'parent' | 'child' | 'spouse' | 'sibling'>('');
 
   // State for 'add_existing_relation' mode
-  const [person1Id, setPerson1Id] = useState<string>('');
+  const [person1Id, setPerson1Id] = useState<string>(selectedFamilyMember?.id || '');
   const [person2Id, setPerson2Id] = useState<string>('');
   const [existingRelationshipType, setExistingRelationshipType] = useState<'' | 'parent' | 'child' | 'spouse' | 'sibling'>('');
 

@@ -233,6 +233,15 @@ const Dashboard: React.FC = () => {
               onSelectMember={setSelectedFamilyMember}
               selectedMember={selectedFamilyMember}
               onDeleteRelationship={handleDeleteRelationship}
+              onAddMember={() => setShowAddMemberForm(true)}
+              onAddRelatedMember={(member) => {
+                setSelectedFamilyMember(member);
+                setShowAddRelationFormMode('add_new_related');
+              }}
+              onAddExistingRelationship={(member) => {
+                setSelectedFamilyMember(member);
+                setShowAddRelationFormMode('add_existing_relation');
+              }}
             />
         )}
 

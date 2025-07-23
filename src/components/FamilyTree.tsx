@@ -9,6 +9,9 @@ interface FamilyTreeProps {
   onSelectMember: (member: FamilyMember) => void;
   selectedMember: FamilyMember | null;
   onDeleteRelationship: (relationshipId: string) => void;
+  onAddMember: () => void;
+  onAddRelatedMember: (member: FamilyMember) => void;
+  onAddExistingRelationship: (member: FamilyMember) => void;
 }
 
 interface TreeNode {
@@ -28,7 +31,10 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   onDeleteMember,
   onSelectMember,
   selectedMember,
-  onDeleteRelationship
+  onDeleteRelationship,
+  onAddMember,
+  onAddRelatedMember,
+  onAddExistingRelationship
 }) => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -295,24 +301,57 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     event.stopPropagation();
     event.preventDefault(); // Prevent any unwanted side effects
     
-    const rect = svgRef.current?.getBoundingClientRect();
-    if (rect) {
-      // Better popup positioning to avoid screen edges
-      const popupWidth = 350;
-      const popupHeight = 400;
-      let x = event.clientX - rect.left;
-      let y = event.clientY - rect.top;
-      
-      // Adjust if popup would go off screen
-      if (x + popupWidth > dimensions.width) {
-        x = dimensions.width - popupWidth - 20;
-      }
-      if (y + popupHeight > dimensions.height) {
-        y = dimensions.height - popupHeight - 20;
-      }
-      
-      setPopupPosition({ x: Math.max(10, x), y: Math.max(10, y) });
+    const svgRect = svgRef.current?.getBoundingClientRect();
+    if (!svgRect) return;
+
+    // Calculate the position relative to the SVG container
+    // Adjust for current pan and zoom
+    const clientX = event.clientX;
+    const clientY = event.clientY;
+
+    // Get the actual position of the clicked member card within the SVG coordinate system
+    // This requires knowing the member card's rendered position (node.x, node.y) and its dimensions
+    // For simplicity, we'll try to position the popup near the click event, but relative to the SVG
+    
+    // Transform client coordinates to SVG coordinates
+    const svgX = (clientX - svgRect.left - pan.x) / zoom;
+    const svgY = (clientY - svgRect.top - pan.y) / zoom;
+
+    // Desired popup dimensions
+    const popupWidth = 380; // As defined in CSS
+    const popupHeight = 600; // Max height, will adjust based on content
+
+    // Calculate initial popup position relative to the SVG's top-left corner
+    let popupLeft = clientX - svgRect.left;
+    let popupTop = clientY - svgRect.top;
+
+    // Adjust for pan and zoom to keep it relative to the viewport
+    // We want the popup to appear near the clicked element, but fixed on the screen
+    // So, we use clientX/Y directly for positioning relative to the viewport
+    // and then adjust if it goes off-screen.
+
+    // Get viewport dimensions
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    // Adjust if popup goes off screen (relative to viewport)
+    if (clientX + popupWidth > viewportWidth - 20) { // 20px margin from right
+      popupLeft = viewportWidth - popupWidth - 20; 
+    } else if (clientX < 20) { // 20px margin from left
+      popupLeft = 20;
     }
+
+    if (clientY + popupHeight > viewportHeight - 20) { // 20px margin from bottom
+      popupTop = viewportHeight - popupHeight - 20;
+    } else if (clientY < 20) { // 20px margin from top
+      popupTop = 20;
+    }
+
+    // Ensure minimum position
+    popupLeft = Math.max(20, popupLeft);
+    popupTop = Math.max(20, popupTop);
+
+    setPopupPosition({ x: popupLeft, y: popupTop });
     setShowMemberPopup(member);
     onSelectMember(member);
   };
@@ -681,7 +720,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             <button
               onClick={() => {
                 closePopup();
-                // These will be handled by the Dashboard component
+                onAddMember();
               }}
               className="popup-action-btn primary"
             >
@@ -690,7 +729,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             <button
               onClick={() => {
                 closePopup();
-                // This will be handled by the Dashboard component
+                if (showMemberPopup) onAddRelatedMember(showMemberPopup);
               }}
               className="popup-action-btn success"
             >
@@ -699,7 +738,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             <button
               onClick={() => {
                 closePopup();
-                // This will be handled by the Dashboard component
+                if (showMemberPopup) onAddExistingRelationship(showMemberPopup);
               }}
               className="popup-action-btn info"
             >
