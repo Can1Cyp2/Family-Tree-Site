@@ -118,25 +118,22 @@
 /* Member Cards */
 .member-card {
   cursor: pointer;
-  transition: all 0.3s ease;
-  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15));
+
+  
   pointer-events: all;
 }
 
 .member-card:hover {
-  transform: scale(1.05);
-  filter: drop-shadow(0 8px 25px rgba(0, 0, 0, 0.25));
-  z-index: 100;
 }
 
 .member-card.selected {
-  transform: scale(1.08);
-  filter: drop-shadow(0 8px 25px rgba(99, 102, 241, 0.4));
-  z-index: 101;
+  
+  
+  
 }
 
 .member-card-bg {
-  transition: all 0.3s ease;
+
 }
 
 .member-card-bg.selected {
@@ -254,7 +251,7 @@
   border-radius: 20px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(0, 0, 0, 0.1);
-  z-index: 2000;
+  
   width: 380px;
   max-height: 600px;
   overflow-y: auto;

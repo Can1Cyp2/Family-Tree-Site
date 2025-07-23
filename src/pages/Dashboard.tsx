@@ -226,8 +226,7 @@ const Dashboard: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="card">
-            <FamilyTree
+          <FamilyTree
               familyMembers={familyMembers}
               relationships={relationships}
               onDeleteMember={handleDeleteMember}
@@ -235,7 +234,6 @@ const Dashboard: React.FC = () => {
               selectedMember={selectedFamilyMember}
               onDeleteRelationship={handleDeleteRelationship}
             />
-          </div>
         )}
 
         {familyMembers.length > 0 && (

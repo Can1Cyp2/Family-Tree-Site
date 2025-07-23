@@ -123,7 +123,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     // Responsive card dimensions based on screen size
     const CARD_WIDTH = Math.min(200, dimensions.width * 0.15);
     const CARD_HEIGHT = Math.min(140, dimensions.height * 0.12);
-    const HORIZONTAL_SPACING = CARD_WIDTH + 100; // Increased spacing
+    const HORIZONTAL_SPACING = CARD_WIDTH + 200; // Increased spacing for wider tree
     const VERTICAL_SPACING = CARD_HEIGHT + 80; // Increased spacing
 
     // Create nodes for all members first
@@ -260,16 +260,20 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     return Array.from(nodeMap.values());
   }, [familyMembers, relationshipMap, dimensions]);
 
-  // Handle mouse events for pan and zoom
+  // Handle mouse events for pan and zoom - FIXED VERSION
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.target === svgRef.current) {
+    // Only start dragging if clicking on the SVG background, not on any member cards
+    const target = e.target as Element;
+    if (target === svgRef.current || target.tagName === 'svg') {
       setIsDragging(true);
       setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+      e.preventDefault(); // Prevent text selection
     }
   }, [pan]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isDragging) {
+      e.preventDefault(); // Prevent any default behavior during drag
       setPan({
         x: e.clientX - dragStart.x,
         y: e.clientY - dragStart.y
@@ -289,6 +293,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
   const handleMemberClick = (member: FamilyMember, event: React.MouseEvent) => {
     event.stopPropagation();
+    event.preventDefault(); // Prevent any unwanted side effects
+    
     const rect = svgRef.current?.getBoundingClientRect();
     if (rect) {
       // Better popup positioning to avoid screen edges
@@ -333,6 +339,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             y2={child.y - CARD_HEIGHT/2}
             className="connection-parent"
             markerEnd="url(#arrowhead)"
+            style={{ pointerEvents: 'none' }} // Prevent interference with hover
           />
         );
       });
@@ -351,6 +358,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
               x2={spouse.x + (spouse.x < node.x ? connectionOffset : -connectionOffset)}
               y2={spouse.y}
               className="connection-spouse"
+              style={{ pointerEvents: 'none' }} // Prevent interference with hover
             />
           );
         }
@@ -361,7 +369,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         if (node.member.id < sibling.member.id && node.generation === sibling.generation) {
           const midY = (node.y + sibling.y) / 2 - CARD_HEIGHT/3;
           lines.push(
-            <g key={`sibling-${node.member.id}-${sibling.member.id}`}>
+            <g key={`sibling-${node.member.id}-${sibling.member.id}`} style={{ pointerEvents: 'none' }}>
               <line
                 x1={node.x}
                 y1={node.y - CARD_HEIGHT/2}
@@ -437,6 +445,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
+        style={{ userSelect: 'none' }} // Prevent text selection
       >
         <defs>
           <marker
@@ -465,15 +474,17 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
               transform={`translate(${node.x - CARD_WIDTH/2}, ${node.y - CARD_HEIGHT/2})`}
               className={`member-card ${selectedMember?.id === node.member.id ? 'selected' : ''}`}
               onClick={(e) => handleMemberClick(node.member, e)}
+              style={{ cursor: 'pointer', pointerEvents: 'all' }} // Ensure proper cursor and interaction
             >
               <rect
                 width={CARD_WIDTH}
                 height={CARD_HEIGHT}
                 rx="16"
                 fill={selectedMember?.id === node.member.id ? '#EEF2FF' : '#FFFFFF'}
-                stroke={selectedMember?.id === node.member.id ? '#4F46E5' : '#D1D5DB'}
-                strokeWidth={selectedMember?.id === node.member.id ? '3' : '2'}
+                stroke={'#D1D5DB'}
+                strokeWidth={'2'}
                 className={`member-card-bg ${selectedMember?.id === node.member.id ? 'selected' : ''}`}
+                style={{ pointerEvents: 'all' }} // Ensure rect is clickable
               />
               
               <text
@@ -481,6 +492,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                 y="32"
                 textAnchor="middle"
                 className="member-name-first"
+                style={{ pointerEvents: 'none' }} // Text should not interfere with clicks
               >
                 {node.member.first_name}
               </text>
@@ -489,6 +501,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                 y="54"
                 textAnchor="middle"
                 className="member-name-last"
+                style={{ pointerEvents: 'none' }}
               >
                 {node.member.last_name}
               </text>
@@ -498,6 +511,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                 y="76"
                 textAnchor="middle"
                 className="member-gender"
+                style={{ pointerEvents: 'none' }}
               >
                 {node.member.gender}
               </text>
@@ -508,6 +522,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                   y="94"
                   textAnchor="middle"
                   className="member-date"
+                  style={{ pointerEvents: 'none' }}
                 >
                   Born: {new Date(node.member.birth_date).toLocaleDateString()}
                 </text>
@@ -519,6 +534,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                   y={node.member.birth_date ? "112" : "94"}
                   textAnchor="middle"
                   className="member-date"
+                  style={{ pointerEvents: 'none' }}
                 >
                   Died: {new Date(node.member.death_date).toLocaleDateString()}
                 </text>
