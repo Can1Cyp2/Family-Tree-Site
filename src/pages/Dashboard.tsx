@@ -195,6 +195,7 @@ const Dashboard: React.FC = () => {
               relationships={relationships}
               onDeleteMember={handleDeleteMember}
               onSelectMember={setSelectedFamilyMember}
+              selectedMember={selectedFamilyMember}
             />
           </div>
         )}

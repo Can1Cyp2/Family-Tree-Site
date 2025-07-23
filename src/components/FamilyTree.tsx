@@ -6,15 +6,17 @@ interface FamilyTreeProps {
   relationships: Relationship[];
   onDeleteMember: (memberId: string) => void;
   onSelectMember: (member: FamilyMember) => void;
+  selectedMember: FamilyMember | null;
 }
 
 const FamilyTree: React.FC<FamilyTreeProps> = ({
   familyMembers,
   relationships,
   onDeleteMember,
-  onSelectMember
+  onSelectMember,
+  selectedMember: propSelectedMember
 }) => {
-  const [selectedMember, setSelectedMember] = useState<string | null>(null);
+  const [selectedMember, setSelectedMember] = useState<string | null>(propSelectedMember?.id || null);
   const [focusedMember, setFocusedMember] = useState<string | null>(null);
 
   // Build relationship maps
@@ -71,6 +73,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         case 'sibling':
           if (!person1Relations.siblings.find(s => s.id === person2.id)) {
             person1Relations.siblings.push(person2);
+          }
+          if (!person2Relations.siblings.find(s => s.id === person1.id)) {
+            person2Relations.siblings.push(person1);
           }
           break;
       }
@@ -197,6 +202,70 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {propSelectedMember && (
+        <div className="card mt-4">
+          <div className="card-body">
+            <h5 className="card-title">Direct Relationships of {propSelectedMember.first_name} {propSelectedMember.last_name}</h5>
+            {
+              (() => {
+                const relations = relationshipMap.get(propSelectedMember.id);
+                if (!relations) {
+                  return <p>No direct relationships found.</p>;
+                }
+
+                return (
+                  <div>
+                    <h6>Parents:</h6>
+                    {relations.parents.length > 0 ? (
+                      <ul>
+                        {relations.parents.map(p => (
+                          <li key={p.id}>{p.first_name} {p.last_name}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p>None</p>
+                    )}
+
+                    <h6>Spouses:</h6>
+                    {relations.spouses.length > 0 ? (
+                      <ul>
+                        {relations.spouses.map(s => (
+                          <li key={s.id}>{s.first_name} {s.last_name}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p>None</p>
+                    )}
+
+                    <h6>Children:</h6>
+                    {relations.children.length > 0 ? (
+                      <ul>
+                        {relations.children.map(c => (
+                          <li key={c.id}>{c.first_name} {c.last_name}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p>None</p>
+                    )}
+
+                    <h6>Siblings:</h6>
+                    {relations.siblings.length > 0 ? (
+                      <ul style={{ borderTop: '1px solid #e5e7eb', paddingTop: '1rem', marginTop: '1rem' }}>
+                        {relations.siblings.map(s => (
+                          <li key={s.id}>{s.first_name} {s.last_name}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p>None</p>
+                    )}
+                  </div>
+                );
+              })()
+            }
+          </div>
         </div>
       )}
     </div>
