@@ -120,19 +120,19 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     return map;
   }, [familyMembers, relationships]);
 
-  // Build tree layout with improved positioning
-  const treeNodes = useMemo(() => {
+  const treeNodes: TreeNode[] = useMemo(() => {
     if (familyMembers.length === 0) return [];
 
-    const nodeMap = new Map<string, TreeNode>();
-    
-    // Responsive card dimensions based on screen size
+    // Define constants for layout
     const CARD_WIDTH = Math.min(200, dimensions.width * 0.15);
     const CARD_HEIGHT = Math.min(140, dimensions.height * 0.12);
-    const HORIZONTAL_SPACING = CARD_WIDTH + 200; // Increased spacing for wider tree
-    const VERTICAL_SPACING = CARD_HEIGHT + 80; // Increased spacing
+    const HORIZONTAL_SPACING = CARD_WIDTH + 100; // Space between siblings
+    const SPOUSE_SPACING = CARD_WIDTH + 50; // Space between spouses
+    const VERTICAL_SPACING = CARD_HEIGHT + 150; // Space between generations
+    const FAMILY_GROUP_SPACING = CARD_WIDTH * 2; // Space between family groups
 
-    // Create nodes for all members first
+    // Initialize nodes
+    const nodeMap = new Map<string, TreeNode>();
     familyMembers.forEach(member => {
       nodeMap.set(member.id, {
         member,
@@ -146,115 +146,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       });
     });
 
-    // Find root members (those without parents)
-    const rootMembers = familyMembers.filter(member => {
-      const relations = relationshipMap.get(member.id);
-      return !relations || relations.parents.length === 0;
-    });
-
-    if (rootMembers.length === 0 && familyMembers.length > 0) {
-      rootMembers.push(familyMembers[0]);
-    }
-
-    // Assign generations using BFS to avoid conflicts
-    const assignGenerations = () => {
-      const visited = new Set<string>();
-      const queue: { id: string; generation: number }[] = [];
-      
-      // Start with root members at generation 0
-      rootMembers.forEach(root => {
-        queue.push({ id: root.id, generation: 0 });
-      });
-
-      while (queue.length > 0) {
-        const { id, generation } = queue.shift()!;
-        
-        if (visited.has(id)) continue;
-        visited.add(id);
-
-        const node = nodeMap.get(id)!;
-        node.generation = generation;
-
-        const relations = relationshipMap.get(id);
-        if (relations) {
-          // Children go to next generation
-          relations.children.forEach(child => {
-            if (!visited.has(child.member.id)) {
-              queue.push({ id: child.member.id, generation: generation + 1 });
-            }
-          });
-          
-          // Spouses stay in same generation
-          relations.spouses.forEach(spouse => {
-            if (!visited.has(spouse.member.id)) {
-              queue.push({ id: spouse.member.id, generation: generation });
-            }
-          });
-          
-          // Siblings stay in same generation
-          relations.siblings.forEach(sibling => {
-            if (!visited.has(sibling.member.id)) {
-              queue.push({ id: sibling.member.id, generation: generation });
-            }
-          });
-        }
-      }
-    };
-
-    assignGenerations();
-
-    // Group members by generation
-    const generationGroups = new Map<number, string[]>();
-    nodeMap.forEach((node, id) => {
-      const gen = node.generation;
-      if (!generationGroups.has(gen)) {
-        generationGroups.set(gen, []);
-      }
-      generationGroups.get(gen)!.push(id);
-    });
-
-    // Position nodes by generation
-    const centerX = dimensions.width / 2;
-    
-    generationGroups.forEach((memberIds, generation) => {
-      const generationY = generation * VERTICAL_SPACING + 100;
-      const totalWidth = memberIds.length * HORIZONTAL_SPACING;
-      let startX = centerX - totalWidth / 2;
-
-      // Sort siblings together and spouses close to each other
-      const sortedMembers = [...memberIds].sort((a, b) => {
-        const nodeA = nodeMap.get(a)!;
-        const nodeB = nodeMap.get(b)!;
-        
-        // Try to keep family units together
-        const relationsA = relationshipMap.get(a);
-        const relationsB = relationshipMap.get(b);
-        
-        if (relationsA && relationsB) {
-          // Check if they are spouses
-          const isSpouse = relationsA.spouses.some(s => s.member.id === b);
-          if (isSpouse) return a < b ? -1 : 1; // Keep spouses adjacent
-          
-          // Check if they are siblings
-          const isSibling = relationsA.siblings.some(s => s.member.id === b);
-          if (isSibling) return a < b ? -1 : 1; // Keep siblings adjacent
-        }
-        
-        return a.localeCompare(b); // Default sort
-      });
-
-      sortedMembers.forEach((memberId, index) => {
-        const node = nodeMap.get(memberId)!;
-        node.x = startX + (index * HORIZONTAL_SPACING) + HORIZONTAL_SPACING / 2;
-        node.y = generationY;
-      });
-    });
-
-    // Build relationship connections
-    familyMembers.forEach(member => {
-      const node = nodeMap.get(member.id)!;
-      const relations = relationshipMap.get(member.id);
-      
+    // Populate relationships
+    nodeMap.forEach((node) => {
+      const relations = relationshipMap.get(node.member.id);
       if (relations) {
         node.parents = relations.parents.map(p => nodeMap.get(p.member.id)!).filter(Boolean);
         node.children = relations.children.map(c => nodeMap.get(c.member.id)!).filter(Boolean);
@@ -263,23 +157,231 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       }
     });
 
-    return Array.from(nodeMap.values());
-  }, [familyMembers, relationshipMap, dimensions]);
+    // Find connected components (family groups)
+    const familyGroups: TreeNode[][] = [];
+    const visited = new Set<string>();
+    
+    nodeMap.forEach((node) => {
+      if (!visited.has(node.member.id)) {
+        const group: TreeNode[] = [];
+        const queue = [node];
+        visited.add(node.member.id);
+        
+        while (queue.length > 0) {
+          const current = queue.shift()!;
+          group.push(current);
+          
+          [...current.parents, ...current.children, ...current.spouses, ...current.siblings]
+            .forEach((related) => {
+              if (related && !visited.has(related.member.id)) {
+                visited.add(related.member.id);
+                queue.push(related);
+              }
+            });
+        }
+        familyGroups.push(group);
+      }
+    });
 
-  // Handle mouse events for pan and zoom - FIXED VERSION
+    let totalLayoutWidth = 0;
+
+    // Process each family group
+    familyGroups.forEach(group => {
+      // Assign generations using BFS from root nodes
+      const assignGenerations = () => {
+        // Find root nodes (no parents in this group)
+        const groupSet = new Set(group.map(n => n.member.id));
+        const roots = group.filter(n => 
+          n.parents.filter(p => groupSet.has(p.member.id)).length === 0
+        );
+        
+        if (roots.length === 0 && group.length > 0) {
+          // If no clear root, pick the oldest person
+          roots.push(group.sort((a, b) => 
+            (a.member.birth_date || '1900').localeCompare(b.member.birth_date || '1900')
+          )[0]);
+        }
+        
+        const processed = new Set<string>();
+        const queue = roots.map(root => ({ node: root, generation: 0 }));
+        
+        while (queue.length > 0) {
+          const { node, generation } = queue.shift()!;
+          
+          if (processed.has(node.member.id)) continue;
+          processed.add(node.member.id);
+          
+          node.generation = generation;
+          
+          // Add children to next generation
+          node.children
+            .filter(child => groupSet.has(child.member.id) && !processed.has(child.member.id))
+            .forEach(child => {
+              queue.push({ node: child, generation: generation + 1 });
+            });
+        }
+        
+        // Ensure all nodes have a generation assigned
+        group.forEach(node => {
+          if (!processed.has(node.member.id)) {
+            node.generation = 0;
+          }
+        });
+      };
+
+      assignGenerations();
+
+      // Group by generation
+      const generationMap = new Map<number, TreeNode[]>();
+      group.forEach(node => {
+        if (!generationMap.has(node.generation)) {
+          generationMap.set(node.generation, []);
+        }
+        generationMap.get(node.generation)!.push(node);
+      });
+
+      // Position nodes generation by generation
+      const generations = Array.from(generationMap.keys()).sort((a, b) => a - b);
+      let groupMaxXForGen = totalLayoutWidth;
+
+      generations.forEach(gen => {
+        const genNodes = generationMap.get(gen)!;
+        
+        // Create sibling groups and spouse pairs
+        const positionedNodes = new Set<string>();
+        let currentX = totalLayoutWidth;
+
+        genNodes.forEach(node => {
+          if (positionedNodes.has(node.member.id)) return;
+
+          // Check if this node has siblings in the same generation
+          const siblingGroup = [node];
+          const groupSet = new Set(group.map(n => n.member.id));
+          
+          node.siblings
+            .filter(sibling => 
+              groupSet.has(sibling.member.id) && 
+              sibling.generation === gen &&
+              !positionedNodes.has(sibling.member.id)
+            )
+            .forEach(sibling => {
+              siblingGroup.push(sibling);
+            });
+
+          // Sort siblings consistently
+          siblingGroup.sort((a, b) => 
+            `${a.member.first_name} ${a.member.last_name}`.localeCompare(
+              `${b.member.first_name} ${b.member.last_name}`
+            )
+          );
+
+          // Position sibling group
+          siblingGroup.forEach((sibling, index) => {
+            positionedNodes.add(sibling.member.id);
+            
+            // Handle spouses
+            const spouseGroup = [sibling];
+            sibling.spouses
+              .filter(spouse => 
+                groupSet.has(spouse.member.id) && 
+                spouse.generation === gen &&
+                !positionedNodes.has(spouse.member.id)
+              )
+              .forEach(spouse => {
+                spouseGroup.push(spouse);
+                positionedNodes.add(spouse.member.id);
+              });
+
+            // Position spouse group
+            spouseGroup.forEach((person, spouseIndex) => {
+              person.x = currentX + (spouseIndex * SPOUSE_SPACING);
+              person.y = gen * VERTICAL_SPACING + 100;
+            });
+
+            currentX += (spouseGroup.length * SPOUSE_SPACING) + HORIZONTAL_SPACING;
+          });
+        });
+
+        groupMaxXForGen = Math.max(groupMaxXForGen, currentX);
+      });
+
+      // Center children under parents
+      generations.slice(1).forEach(gen => {
+        const genNodes = generationMap.get(gen)!;
+        
+        genNodes.forEach(node => {
+          const groupSet = new Set(group.map(n => n.member.id));
+          const parentsInGroup = node.parents.filter(p => groupSet.has(p.member.id));
+          
+          if (parentsInGroup.length > 0) {
+            const parentCenterX = parentsInGroup.reduce((sum, p) => sum + p.x, 0) / parentsInGroup.length;
+            
+            // Get all siblings of this node in the same generation
+            const siblingsInGroup = [node, ...node.siblings.filter(s => 
+              groupSet.has(s.member.id) && s.generation === gen
+            )];
+            
+            // Remove duplicates and sort
+            const uniqueSiblings = Array.from(new Set(siblingsInGroup.map(s => s.member.id)))
+              .map(id => siblingsInGroup.find(s => s.member.id === id)!)
+              .sort((a, b) => a.x - b.x);
+
+            if (uniqueSiblings.length > 1) {
+              // Position sibling group centered under parents
+              const groupWidth = (uniqueSiblings.length - 1) * HORIZONTAL_SPACING;
+              const startX = parentCenterX - (groupWidth / 2);
+              
+              uniqueSiblings.forEach((sibling, index) => {
+                sibling.x = startX + (index * HORIZONTAL_SPACING);
+              });
+            } else {
+              // Single child, center under parents
+              node.x = parentCenterX;
+            }
+          }
+        });
+      });
+
+      // Update total width for next family group
+      const groupMinX = Math.min(...group.map(n => n.x));
+      const groupMaxX = Math.max(...group.map(n => n.x));
+      const actualGroupWidth = groupMaxX - groupMinX + CARD_WIDTH;
+      
+      // Adjust positions to prevent overlap
+      if (groupMinX < totalLayoutWidth) {
+        const shiftAmount = totalLayoutWidth - groupMinX;
+        group.forEach(node => {
+          node.x += shiftAmount;
+        });
+      }
+      
+      totalLayoutWidth = Math.max(...group.map(n => n.x)) + CARD_WIDTH + FAMILY_GROUP_SPACING;
+    });
+
+    // Center the entire layout
+    if (totalLayoutWidth > dimensions.width) {
+      const centerShift = Math.max(50, (dimensions.width - totalLayoutWidth + FAMILY_GROUP_SPACING) / 2);
+      nodeMap.forEach(node => {
+        node.x += centerShift;
+      });
+    }
+
+    return Array.from(nodeMap.values());
+  }, [familyMembers, relationships, dimensions, relationshipMap]);
+
+  // Handle mouse events for pan and zoom
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    // Only start dragging if clicking on the SVG background, not on any member cards
     const target = e.target as Element;
     if (target === svgRef.current || target.tagName === 'svg') {
       setIsDragging(true);
       setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
-      e.preventDefault(); // Prevent text selection
+      e.preventDefault();
     }
   }, [pan]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isDragging) {
-      e.preventDefault(); // Prevent any default behavior during drag
+      e.preventDefault();
       setPan({
         x: e.clientX - dragStart.x,
         y: e.clientY - dragStart.y
@@ -299,55 +401,34 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
   const handleMemberClick = (member: FamilyMember, event: React.MouseEvent) => {
     event.stopPropagation();
-    event.preventDefault(); // Prevent any unwanted side effects
+    event.preventDefault();
     
     const svgRect = svgRef.current?.getBoundingClientRect();
     if (!svgRect) return;
 
-    // Calculate the position relative to the SVG container
-    // Adjust for current pan and zoom
     const clientX = event.clientX;
     const clientY = event.clientY;
+    const popupWidth = 380;
+    const popupHeight = 600;
 
-    // Get the actual position of the clicked member card within the SVG coordinate system
-    // This requires knowing the member card's rendered position (node.x, node.y) and its dimensions
-    // For simplicity, we'll try to position the popup near the click event, but relative to the SVG
-    
-    // Transform client coordinates to SVG coordinates
-    const svgX = (clientX - svgRect.left - pan.x) / zoom;
-    const svgY = (clientY - svgRect.top - pan.y) / zoom;
-
-    // Desired popup dimensions
-    const popupWidth = 380; // As defined in CSS
-    const popupHeight = 600; // Max height, will adjust based on content
-
-    // Calculate initial popup position relative to the SVG's top-left corner
     let popupLeft = clientX - svgRect.left;
     let popupTop = clientY - svgRect.top;
 
-    // Adjust for pan and zoom to keep it relative to the viewport
-    // We want the popup to appear near the clicked element, but fixed on the screen
-    // So, we use clientX/Y directly for positioning relative to the viewport
-    // and then adjust if it goes off-screen.
-
-    // Get viewport dimensions
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
-    // Adjust if popup goes off screen (relative to viewport)
-    if (clientX + popupWidth > viewportWidth - 20) { // 20px margin from right
+    if (clientX + popupWidth > viewportWidth - 20) {
       popupLeft = viewportWidth - popupWidth - 20; 
-    } else if (clientX < 20) { // 20px margin from left
+    } else if (clientX < 20) {
       popupLeft = 20;
     }
 
-    if (clientY + popupHeight > viewportHeight - 20) { // 20px margin from bottom
+    if (clientY + popupHeight > viewportHeight - 20) {
       popupTop = viewportHeight - popupHeight - 20;
-    } else if (clientY < 20) { // 20px margin from top
+    } else if (clientY < 20) {
       popupTop = 20;
     }
 
-    // Ensure minimum position
     popupLeft = Math.max(20, popupLeft);
     popupTop = Math.max(20, popupTop);
 
@@ -360,80 +441,125 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     setShowMemberPopup(null);
   };
 
-  // Generate connection lines
   const generateConnections = () => {
     const lines: JSX.Element[] = [];
     const CARD_WIDTH = Math.min(200, dimensions.width * 0.15);
     const CARD_HEIGHT = Math.min(140, dimensions.height * 0.12);
 
-    treeNodes.forEach(node => {
+    treeNodes.forEach((node) => {
       // Parent-child connections
-      node.children.forEach(child => {
-        lines.push(
-          <line
-            key={`parent-${node.member.id}-${child.member.id}`}
-            x1={node.x}
-            y1={node.y + CARD_HEIGHT/2}
-            x2={child.x}
-            y2={child.y - CARD_HEIGHT/2}
-            className="connection-parent"
-            markerEnd="url(#arrowhead)"
-            style={{ pointerEvents: 'none' }} // Prevent interference with hover
-          />
+      node.children.forEach((child) => {
+        // Find if this child has siblings
+        const childSiblings = child.siblings.filter(sibling => 
+          node.children.some(nodeChild => nodeChild.member.id === sibling.member.id)
         );
-      });
 
-      // Spouse connections
-      node.spouses.forEach(spouse => {
-        if (node.member.id < spouse.member.id) { // Avoid duplicate lines
-          const distance = Math.abs(node.x - spouse.x);
-          const connectionOffset = Math.min(CARD_WIDTH/2 - 10, distance/4);
-          
+        if (childSiblings.length > 0) {
+          // Child has siblings - draw connection to midpoint above siblings
+          const allSiblings = [child, ...childSiblings];
+          const siblingCenterX = allSiblings.reduce((sum, s) => sum + s.x, 0) / allSiblings.length;
+          const siblingY = child.y;
+          const midpointY = node.y + CARD_HEIGHT/2 + (siblingY - node.y - CARD_HEIGHT/2) / 2;
+
+          // Line from parent down to midpoint
           lines.push(
             <line
-              key={`spouse-${node.member.id}-${spouse.member.id}`}
-              x1={node.x + (node.x < spouse.x ? connectionOffset : -connectionOffset)}
-              y1={node.y}
-              x2={spouse.x + (spouse.x < node.x ? connectionOffset : -connectionOffset)}
-              y2={spouse.y}
-              className="connection-spouse"
-              style={{ pointerEvents: 'none' }} // Prevent interference with hover
+              key={`parent-mid-${node.member.id}-${child.member.id}`}
+              x1={node.x}
+              y1={node.y + CARD_HEIGHT/2}
+              x2={node.x}
+              y2={midpointY}
+              className="connection-parent"
+            />
+          );
+
+          
+
+          // Line from midpoint to each child
+          allSiblings.forEach((sibling) => {
+            lines.push(
+              <line
+                key={`mid-child-${node.member.id}-${sibling.member.id}`}
+                x1={sibling.x}
+                y1={midpointY}
+                x2={sibling.x}
+                y2={sibling.y - CARD_HEIGHT/2}
+                className="connection-parent"
+                markerEnd="url(#arrowhead)"
+              />
+            );
+          });
+        } else {
+          // Single child - direct connection
+          lines.push(
+            <line
+              key={`parent-child-${node.member.id}-${child.member.id}`}
+              x1={node.x}
+              y1={node.y + CARD_HEIGHT/2}
+              x2={child.x}
+              y2={child.y - CARD_HEIGHT/2}
+              className="connection-parent"
+              markerEnd="url(#arrowhead)"
             />
           );
         }
       });
 
-      // Sibling connections
-      node.siblings.forEach(sibling => {
-        if (node.member.id < sibling.member.id && node.generation === sibling.generation) {
-          const midY = (node.y + sibling.y) / 2 - CARD_HEIGHT/3;
+      // Spouse connections
+      node.spouses.forEach((spouse) => {
+        if (node.member.id < spouse.member.id) { // Prevent duplicate lines
           lines.push(
-            <g key={`sibling-${node.member.id}-${sibling.member.id}`} style={{ pointerEvents: 'none' }}>
-              <line
-                x1={node.x}
-                y1={node.y - CARD_HEIGHT/2}
-                x2={node.x}
-                y2={midY}
-                className="connection-sibling"
-              />
-              <line
-                x1={node.x}
-                y1={midY}
-                x2={sibling.x}
-                y2={midY}
-                className="connection-sibling"
-              />
-              <line
-                x1={sibling.x}
-                y1={midY}
-                x2={sibling.x}
-                y2={sibling.y - CARD_HEIGHT/2}
-                className="connection-sibling"
-              />
-            </g>
+            <line
+              key={`spouse-${node.member.id}-${spouse.member.id}`}
+              x1={Math.min(node.x, spouse.x) + CARD_WIDTH/2}
+              y1={node.y}
+              x2={Math.max(node.x, spouse.x) - CARD_WIDTH/2}
+              y2={spouse.y}
+              className="connection-spouse"
+            />
           );
         }
       });
+
+      });
+
+    // Sibling connections (new logic, processed once per group)
+    const processedSiblingGroups = new Set<string>();
+    treeNodes.forEach((node) => {
+      if (node.siblings.length > 0) {
+        // Collect all members of this sibling group, including the current node
+        const siblingGroupMembers = new Set<TreeNode>();
+        siblingGroupMembers.add(node);
+        node.siblings.forEach(s => siblingGroupMembers.add(s));
+
+        const allSiblings = Array.from(siblingGroupMembers).sort((a, b) => a.x - b.x);
+
+        // Create a unique identifier for this sibling group based on sorted member IDs
+        const groupIds = allSiblings.map(s => s.member.id).sort().join('-');
+        if (processedSiblingGroups.has(groupIds)) {
+          return; // This group has already been processed
+        }
+        processedSiblingGroups.add(groupIds);
+
+        const siblingLineY = allSiblings[0].y + 5; // Vertical center of the cards, with a small offset
+
+        for (let i = 0; i < allSiblings.length - 1; i++) {
+          const currentSibling = allSiblings[i];
+          const nextSibling = allSiblings[i + 1];
+
+          // Draw horizontal line between adjacent siblings
+          lines.push(
+            <line
+              key={`sibling-connect-${currentSibling.member.id}-${nextSibling.member.id}`}
+              x1={currentSibling.x + CARD_WIDTH / 2} // Right side of current sibling
+              y1={siblingLineY}
+              x2={nextSibling.x - CARD_WIDTH / 2}   // Left side of next sibling
+              y2={siblingLineY}
+              className="connection-sibling"
+            />
+          );
+        }
+      }
     });
 
     return lines;
@@ -484,7 +610,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
-        style={{ userSelect: 'none' }} // Prevent text selection
+        style={{ userSelect: 'none' }}
       >
         <defs>
           <marker
@@ -503,17 +629,15 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         </defs>
 
         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-          {/* Connection lines */}
           {generateConnections()}
 
-          {/* Family member cards */}
           {treeNodes.map(node => (
             <g 
               key={node.member.id} 
               transform={`translate(${node.x - CARD_WIDTH/2}, ${node.y - CARD_HEIGHT/2})`}
               className={`member-card ${selectedMember?.id === node.member.id ? 'selected' : ''}`}
               onClick={(e) => handleMemberClick(node.member, e)}
-              style={{ cursor: 'pointer', pointerEvents: 'all' }} // Ensure proper cursor and interaction
+              style={{ cursor: 'pointer', pointerEvents: 'all' }}
             >
               <rect
                 width={CARD_WIDTH}
@@ -523,7 +647,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                 stroke={'#D1D5DB'}
                 strokeWidth={'2'}
                 className={`member-card-bg ${selectedMember?.id === node.member.id ? 'selected' : ''}`}
-                style={{ pointerEvents: 'all' }} // Ensure rect is clickable
+                style={{ pointerEvents: 'all' }}
               />
               
               <text
@@ -531,7 +655,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                 y="32"
                 textAnchor="middle"
                 className="member-name-first"
-                style={{ pointerEvents: 'none' }} // Text should not interfere with clicks
+                style={{ pointerEvents: 'none' }}
               >
                 {node.member.first_name}
               </text>
@@ -669,63 +793,12 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                       <span className="relationship-none">None</span>
                     )}
                   </div>
-
-                  <div className="relationship-group">
-                    <div className="relationship-label">Children:</div>
-                    {relations.children.length > 0 ? (
-                      <ul className="relationship-list">
-                        {relations.children.map(({ member: c, relationship: rel }) => (
-                          <li key={c.id} className="relationship-item">
-                            <span className="relationship-name">{c.first_name} {c.last_name}</span>
-                            <button
-                              onClick={() => onDeleteRelationship(rel.id)}
-                              className="delete-relationship-btn"
-                            >
-                              Delete
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <span className="relationship-none">None</span>
-                    )}
-                  </div>
-
-                  <div className="relationship-group">
-                    <div className="relationship-label">Siblings:</div>
-                    {relations.siblings.length > 0 ? (
-                      <ul className="relationship-list">
-                        {relations.siblings.map(({ member: s, relationship: rel }) => (
-                          <li key={s.id} className="relationship-item">
-                            <span className="relationship-name">{s.first_name} {s.last_name}</span>
-                            <button
-                              onClick={() => onDeleteRelationship(rel.id)}
-                              className="delete-relationship-btn"
-                            >
-                              Delete
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <span className="relationship-none">None</span>
-                    )}
-                  </div>
                 </div>
               );
             })()}
           </div>
 
           <div className="popup-actions">
-            <button
-              onClick={() => {
-                closePopup();
-                onAddMember();
-              }}
-              className="popup-action-btn primary"
-            >
-              Add New Family Member
-            </button>
             <button
               onClick={() => {
                 closePopup();
