@@ -12,6 +12,7 @@ interface FamilyTreeProps {
   onAddMember: () => void;
   onAddRelatedMember: (member: FamilyMember) => void;
   onAddExistingRelationship: (member: FamilyMember) => void;
+  onEditMember: (member: FamilyMember) => void;
 }
 
 interface TreeNode {
@@ -35,7 +36,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   onDeleteRelationship,
   onAddMember,
   onAddRelatedMember,
-  onAddExistingRelationship
+  onAddExistingRelationship,
+  onEditMember
 }) => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -608,8 +610,23 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                 height={CARD_HEIGHT}
                 rx="12"
                 fill={selectedMember?.id === node.member.id ? '#EEF2FF' : '#FFFFFF'}
-                stroke={selectedMember?.id === node.member.id ? '#6366F1' : '#E5E7EB'}
-                strokeWidth={selectedMember?.id === node.member.id ? '3' : '1'}
+                stroke={(() => {
+                  if (selectedMember?.id === node.member.id) {
+                    return '#6366F1'; // Selected state takes priority
+                  }
+                  // Gender-based outline colors
+                  switch (node.member.gender) {
+                    case 'male':
+                      return '#3B82F6'; // Blue for males
+                    case 'female':
+                      return '#EC4899'; // Pink for females
+                    case 'other':
+                      return '#10B981'; // Green for other
+                    default:
+                      return '#E5E7EB'; // Default gray
+                  }
+                })()}
+                strokeWidth={selectedMember?.id === node.member.id ? '3' : '2'}
                 filter="url(#cardShadow)"
                 style={{ pointerEvents: 'all' }}
               />
@@ -639,6 +656,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
               >
                 +
               </text>
+              
+
               
               {/* Member name */}
               <text
@@ -696,17 +715,29 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                 </text>
               )}
 
-              {/* Gender indicator */}
+              {/* Gender icon */}
               <text
-                x={CARD_WIDTH/2}
+                x={CARD_WIDTH - 20}
                 y={CARD_HEIGHT - 15}
                 textAnchor="middle"
-                className="member-gender"
-                fill="#9CA3AF"
-                fontSize="10"
+                className="member-gender-icon"
+                fill={(() => {
+                  switch (node.member.gender) {
+                    case 'male':
+                      return '#3B82F6'; // Blue for males
+                    case 'female':
+                      return '#EC4899'; // Pink for females
+                    case 'other':
+                      return '#10B981'; // Green for other
+                    default:
+                      return '#9CA3AF'; // Default gray
+                  }
+                })()}
+                fontSize="14"
+                fontWeight="bold"
                 style={{ pointerEvents: 'none' }}
               >
-                {node.member.gender}
+                {node.member.gender === 'male' ? '♂' : node.member.gender === 'female' ? '♀' : '⚧'}
               </text>
 
               {/* Living indicator */}
@@ -756,9 +787,35 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           }}
         >
           <div className="popup-header">
-            <h3 className="popup-title">
-              {showMemberPopup.first_name} {showMemberPopup.last_name}
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <h3 className="popup-title">
+                {showMemberPopup.first_name} {showMemberPopup.last_name}
+              </h3>
+              <button
+                onClick={() => {
+                  closePopup();
+                  onEditMember(showMemberPopup);
+                }}
+                style={{
+                  background: '#10B981',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  color: 'white',
+                  padding: '0',
+                  borderRadius: '50%',
+                  width: '24px',
+                  height: '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 'bold'
+                }}
+                title="Edit member"
+              >
+                ✎
+              </button>
+            </div>
             <button
               onClick={closePopup}
               className="popup-close"
@@ -801,6 +858,27 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                     {relations.spouses.length > 0 ? (
                       <ul className="relationship-list">
                         {relations.spouses.map(({ member: s, relationship: rel }) => (
+                          <li key={s.id} className="relationship-item">
+                            <span className="relationship-name">{s.first_name} {s.last_name}</span>
+                            <button
+                              onClick={() => onDeleteRelationship(rel.id)}
+                              className="delete-relationship-btn"
+                            >
+                              Delete
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <span className="relationship-none">None</span>
+                    )}
+                  </div>
+
+                  <div className="relationship-group">
+                    <div className="relationship-label">Siblings:</div>
+                    {relations.siblings.length > 0 ? (
+                      <ul className="relationship-list">
+                        {relations.siblings.map(({ member: s, relationship: rel }) => (
                           <li key={s.id} className="relationship-item">
                             <span className="relationship-name">{s.first_name} {s.last_name}</span>
                             <button

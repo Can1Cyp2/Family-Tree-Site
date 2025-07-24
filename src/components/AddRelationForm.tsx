@@ -29,6 +29,7 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
   const [newMemberFirstName, setNewMemberFirstName] = useState('');
   const [newMemberLastName, setNewMemberLastName] = useState('');
   const [birthDate, setBirthDate] = useState('');
+  const [deathDate, setDeathDate] = useState('');
   const [gender, setGender] = useState<'male' | 'female' | 'other' | ''>('');
   const [newRelatedRelationshipType, setNewRelatedRelationshipType] = useState<'' | 'parent' | 'child' | 'spouse' | 'sibling'>('');
 
@@ -61,6 +62,7 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
             first_name: newMemberFirstName,
             last_name: newMemberLastName,
             birth_date: birthDate || null,
+            death_date: deathDate || null,
             gender: gender || null,
           })
           .select()
@@ -133,6 +135,60 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
               console.warn('Failed to add reciprocal relationship:', reciprocalError);
             }
           }
+
+          // If this is a sibling relationship, automatically add relationships with all existing siblings
+          if (newRelatedRelationshipType === 'sibling') {
+            console.log('Auto-sibling: Processing sibling relationship for', selectedFamilyMember.first_name);
+            console.log('Auto-sibling: Existing relationships count:', existingRelationships.length);
+            
+            // Find all existing siblings of the selected family member
+            const existingSiblingRelationships = existingRelationships.filter(rel =>
+              (rel.person1_id === selectedFamilyMember.id || rel.person2_id === selectedFamilyMember.id) &&
+              rel.relationship_type === 'sibling'
+            );
+
+            console.log('Auto-sibling: Found existing sibling relationships:', existingSiblingRelationships.length);
+
+            // Get the IDs of all existing siblings
+            const existingSiblingIds = existingSiblingRelationships.map(rel => {
+              if (rel.person1_id === selectedFamilyMember.id) {
+                return rel.person2_id;
+              } else {
+                return rel.person1_id;
+              }
+            });
+
+            console.log('Auto-sibling: Existing sibling IDs:', existingSiblingIds);
+
+            // Create sibling relationships between the new member and all existing siblings
+            for (const siblingId of existingSiblingIds) {
+              // Add relationship from new member to existing sibling
+              const { error: siblingError1 } = await supabase
+                .from('relationships')
+                .insert({
+                  user_id: user.id,
+                  person1_id: newMember.id,
+                  person2_id: siblingId,
+                  relationship_type: 'sibling',
+                });
+              if (siblingError1) {
+                console.warn('Failed to add sibling relationship:', siblingError1);
+              }
+
+              // Add reciprocal relationship from existing sibling to new member
+              const { error: siblingError2 } = await supabase
+                .from('relationships')
+                .insert({
+                  user_id: user.id,
+                  person1_id: siblingId,
+                  person2_id: newMember.id,
+                  relationship_type: 'sibling',
+                });
+              if (siblingError2) {
+                console.warn('Failed to add reciprocal sibling relationship:', siblingError2);
+              }
+            }
+          }
         }
 
         if (onRelationAdded) onRelationAdded(newMember);
@@ -140,6 +196,7 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
         setNewMemberFirstName('');
         setNewMemberLastName('');
         setBirthDate('');
+        setDeathDate('');
         setGender('');
         setNewRelatedRelationshipType('');
       } catch (err: any) {
@@ -271,6 +328,16 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
                   id="newMemberBirthDate"
                   value={birthDate}
                   onChange={(e) => setBirthDate(e.target.value)}
+                />
+              </div>
+              <div className="mb-3">
+                <label htmlFor="newMemberDeathDate" className="form-label">Death Date (Optional)</label>
+                <input
+                  type="date"
+                  className="form-control"
+                  id="newMemberDeathDate"
+                  value={deathDate}
+                  onChange={(e) => setDeathDate(e.target.value)}
                 />
               </div>
               <div className="mb-3">

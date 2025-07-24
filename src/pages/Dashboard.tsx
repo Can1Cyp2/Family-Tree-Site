@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import FamilyTree from '../components/FamilyTree';
 import AddFamilyMemberForm from '../components/AddFamilyMemberForm';
 import AddRelationForm from '../components/AddRelationForm';
+import EditMemberForm from '../components/EditMemberForm';
 import { FamilyMember, Relationship } from '../types';
 import { supabase } from '../supabaseClient';
 
@@ -16,6 +17,8 @@ const Dashboard: React.FC = () => {
   const [error, setError] = useState('');
   const [showAddMemberForm, setShowAddMemberForm] = useState(false);
   const [showAddRelationFormMode, setShowAddRelationFormMode] = useState<'none' | 'add_new_related' | 'add_existing_relation'>('none');
+  const [showEditMemberForm, setShowEditMemberForm] = useState(false);
+  const [memberToEdit, setMemberToEdit] = useState<FamilyMember | null>(null);
   const [selectedFamilyMember, setSelectedFamilyMember] = useState<FamilyMember | null>(null);
 
   useEffect(() => {
@@ -71,6 +74,19 @@ const Dashboard: React.FC = () => {
     fetchData();
     setShowAddRelationFormMode('none');
     setSelectedFamilyMember(null); // Clear selection after adding a relation
+  };
+
+  const handleEditMember = (member: FamilyMember) => {
+    setMemberToEdit(member);
+    setShowEditMemberForm(true);
+  };
+
+  const handleMemberUpdated = (updatedMember: FamilyMember) => {
+    setFamilyMembers(prev => prev.map(member => 
+      member.id === updatedMember.id ? updatedMember : member
+    ));
+    setShowEditMemberForm(false);
+    setMemberToEdit(null);
   };
 
   const handleDeleteMember = async (memberId: string) => {
@@ -242,6 +258,7 @@ const Dashboard: React.FC = () => {
                 setSelectedFamilyMember(member);
                 setShowAddRelationFormMode('add_existing_relation');
               }}
+              onEditMember={handleEditMember}
             />
         )}
 
@@ -337,6 +354,8 @@ const Dashboard: React.FC = () => {
               <AddRelationForm
                 mode="add_new_related"
                 selectedFamilyMember={selectedFamilyMember}
+                familyMembers={familyMembers}
+                existingRelationships={relationships}
                 onRelationAdded={handleRelationAdded}
                 onCancel={() => setShowAddRelationFormMode('none')}
               />
@@ -351,6 +370,40 @@ const Dashboard: React.FC = () => {
                 onCancel={() => setShowAddRelationFormMode('none')}
               />
             )}
+          </div>
+        </div>
+      )}
+
+      {showEditMemberForm && memberToEdit && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            padding: '2rem',
+            borderRadius: '10px',
+            maxWidth: '500px',
+            width: '90%',
+            maxHeight: '90vh',
+            overflow: 'auto'
+          }}>
+            <EditMemberForm
+              member={memberToEdit}
+              onMemberUpdated={handleMemberUpdated}
+              onCancel={() => {
+                setShowEditMemberForm(false);
+                setMemberToEdit(null);
+              }}
+            />
           </div>
         </div>
       )}
