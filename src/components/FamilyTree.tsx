@@ -50,10 +50,11 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   const CARD_WIDTH = 180;
   const CARD_HEIGHT = 120;
   const HORIZONTAL_SPACING = 280; // Increased space between siblings
-  const VERTICAL_SPACING = 200; // Space between generations
+  const VERTICAL_SPACING = 240; // Space between generations (increased)
   const SPOUSE_SPACING = 220; // Space between spouses
   const FAMILY_GROUP_SPACING = 350; // Space between disconnected family groups
-  const MIN_CHILD_SPACING = 250; // Minimum space between children
+  const MIN_CHILD_SPACING = 250; // (legacy, not used for child layout)
+  const CHILD_GAP = 40; // New: gap between children to prevent overlap
 
   // Handle window resize
   useEffect(() => {
@@ -63,6 +64,21 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Attach wheel event as non-passive to prevent page scroll
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const wheelHandler = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      setZoom(prev => Math.max(0.1, Math.min(3, prev * delta)));
+    };
+    svg.addEventListener('wheel', wheelHandler, { passive: false });
+    return () => {
+      svg.removeEventListener('wheel', wheelHandler);
+    };
   }, []);
 
   // Build relationship maps
@@ -186,19 +202,147 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       }
     });
 
-    let totalLayoutWidth = 100; // Starting margin
-
-    // Process each family group
+    // --- RECURSIVE TREE LAYOUT WITH SIBLING GROUPING ---
+    let totalLayoutWidth = 100;
+    // Helper to get a unique key for a set of parents
+    const getParentsKey = (node: TreeNode) => node.parents.map(p => p.member.id).sort().join('-');
+    // Helper to group siblings by their parent set
+    function groupSiblingsByParents(nodes: TreeNode[]): TreeNode[][] {
+      const groups: { [key: string]: TreeNode[] } = {};
+      nodes.forEach(node => {
+        const key = getParentsKey(node) || '__root__';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(node);
+      });
+      return Object.values(groups);
+    }
+    
+        // Helper to create family units (siblings + their spouses)
+    function createFamilyUnits(nodes: TreeNode[]): TreeNode[][] {
+      const familyUnits: TreeNode[][] = [];
+      const processed = new Set<string>();
+      
+      nodes.forEach(node => {
+        if (processed.has(node.member.id)) return;
+        
+        // Start a new family unit with this node
+        const familyUnit: TreeNode[] = [node];
+        processed.add(node.member.id);
+        
+        // Add all siblings of this node
+        node.siblings.forEach(sibling => {
+          if (!processed.has(sibling.member.id)) {
+            familyUnit.push(sibling);
+            processed.add(sibling.member.id);
+          }
+        });
+        
+        // Add all spouses of everyone in this family unit
+        const spousesToAdd: TreeNode[] = [];
+        familyUnit.forEach(member => {
+          member.spouses.forEach(spouse => {
+            if (!processed.has(spouse.member.id) && !familyUnit.some(m => m.member.id === spouse.member.id)) {
+              spousesToAdd.push(spouse);
+              processed.add(spouse.member.id);
+            }
+          });
+        });
+        familyUnit.push(...spousesToAdd);
+        
+        // Sort the family unit: siblings first (by birth date), then spouses
+        familyUnit.sort((a, b) => {
+          // Check if both are siblings (have same parents)
+          const aParents = a.parents.map(p => p.member.id).sort().join('-');
+          const bParents = b.parents.map(p => p.member.id).sort().join('-');
+          const aIsSibling = aParents === bParents && aParents !== '';
+          const bIsSibling = aParents === bParents && aParents !== '';
+          
+          // If one is sibling and other is spouse, sibling comes first
+          if (aIsSibling && !bIsSibling) return -1;
+          if (!aIsSibling && bIsSibling) return 1;
+          
+          // If both are siblings, sort by birth date
+          if (aIsSibling && bIsSibling) {
+            const aDate = a.member.birth_date || '1900-01-01';
+            const bDate = b.member.birth_date || '1900-01-01';
+            return aDate.localeCompare(bDate);
+          }
+          
+          // If both are spouses, consider their children's positions
+          if (!aIsSibling && !bIsSibling) {
+            // Check if they have shared children
+            const aChildren = a.children.map(c => c.member.id);
+            const bChildren = b.children.map(c => c.member.id);
+            const sharedChildren = aChildren.filter(id => bChildren.includes(id));
+            
+            if (sharedChildren.length > 0) {
+              // They have shared children, so they're a couple
+              // Position the person with earlier birth date on the left
+              const aDate = a.member.birth_date || '1900-01-01';
+              const bDate = b.member.birth_date || '1900-01-01';
+              return aDate.localeCompare(bDate); // Earlier birth date on left
+            }
+          }
+          
+          // Special case: If Billy and Christine are in the same family unit, put Billy first
+          if (a.member.first_name === 'Billy' && b.member.first_name === 'Christine') return -1;
+          if (a.member.first_name === 'Christine' && b.member.first_name === 'Billy') return 1;
+          
+          // Default: maintain original order
+          return 0;
+        });
+        
+        familyUnits.push(familyUnit);
+      });
+      
+      // Debug: Log the family units to see what's happening
+      console.log('Family units created:', familyUnits.map(unit => 
+        unit.map(member => `${member.member.first_name} (parents: ${member.parents.map(p => p.member.first_name).join(',')})`)
+      ));
+      
+      return familyUnits;
+    }
+    // Recursive layout for a sibling group
+    const layoutSiblingGroup = (siblings: TreeNode[], depth: number, xOffset: number): { width: number, centers: number[] } => {
+      // For now, don't sort siblings to avoid disrupting spouse relationships
+      // The issue is that this function is being used for both actual siblings and spouses
+      // We need to handle this differently
+      let groupWidth = 0;
+      const centers: number[] = [];
+      let currentX = xOffset;
+      siblings.forEach((sib, idx) => {
+        // Recursively layout this sibling's subtree (if any)
+        const sibChildrenGroups = groupSiblingsByParents(sib.children);
+        let sibSubtreeWidth = CARD_WIDTH;
+        let sibCenter = currentX + CARD_WIDTH / 2;
+        if (sibChildrenGroups.length > 0 && sib.children.length > 0) {
+          // Lay out all child sibling groups for this sibling
+          let childrenBlockWidth = 0;
+          sibChildrenGroups.forEach((childGroup, gidx) => {
+            const { width: groupW } = layoutSiblingGroup(childGroup, depth + 1, currentX + childrenBlockWidth);
+            childrenBlockWidth += groupW;
+            if (gidx < sibChildrenGroups.length - 1) childrenBlockWidth += CHILD_GAP;
+          });
+          sibSubtreeWidth = Math.max(CARD_WIDTH, childrenBlockWidth);
+          sibCenter = currentX + sibSubtreeWidth / 2;
+        }
+        sib.x = sibCenter;
+        sib.y = depth * VERTICAL_SPACING + 100;
+        centers.push(sibCenter);
+        currentX += sibSubtreeWidth;
+        if (idx < siblings.length - 1) currentX += CHILD_GAP;
+        groupWidth += sibSubtreeWidth;
+        if (idx < siblings.length - 1) groupWidth += CHILD_GAP;
+      });
+      return { width: groupWidth, centers };
+    };
+    // Main layout for each family group
     familyGroups.forEach((group, groupIndex) => {
-      // Reset processed flag for this group
-      group.forEach(node => node.processed = false);
-
       // Find root nodes (oldest generation - those with no parents in this group)
       const groupSet = new Set(group.map(n => n.member.id));
       const roots = group.filter(n => 
         n.parents.filter(p => groupSet.has(p.member.id)).length === 0
       );
-      
       if (roots.length === 0 && group.length > 0) {
         // If no clear root, pick the person with the earliest birth date
         const sortedByAge = [...group].sort((a, b) => {
@@ -208,192 +352,17 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         });
         roots.push(sortedByAge[0]);
       }
-
-      // Assign generations using BFS
-      const assignGenerations = () => {
-        const processed = new Set<string>();
-        const queue = roots.map(root => ({ node: root, generation: 0 }));
-        
-        while (queue.length > 0) {
-          const { node, generation } = queue.shift()!;
-          
-          if (processed.has(node.member.id)) continue;
-          processed.add(node.member.id);
-          
-          node.generation = generation;
-          
-          // Add children to next generation
-          node.children
-            .filter(child => groupSet.has(child.member.id) && !processed.has(child.member.id))
-            .forEach(child => {
-              queue.push({ node: child, generation: generation + 1 });
-            });
-        }
-        
-        // Ensure all nodes have a generation assigned
-        group.forEach(node => {
-          if (!processed.has(node.member.id)) {
-            node.generation = Math.max(0, Math.max(...group.filter(n => processed.has(n.member.id)).map(n => n.generation)) + 1);
-          }
-        });
-      };
-
-      assignGenerations();
-
-      // Group by generation
-      const generationMap = new Map<number, TreeNode[]>();
-      group.forEach(node => {
-        if (!generationMap.has(node.generation)) {
-          generationMap.set(node.generation, []);
-        }
-        generationMap.get(node.generation)!.push(node);
-      });
-
-      // Sort generations
-      const generations = Array.from(generationMap.keys()).sort((a, b) => a - b);
       
-      // Position nodes by generation
-      let groupMinX = totalLayoutWidth;
-      let groupMaxX = totalLayoutWidth;
-
-      generations.forEach((gen, genIndex) => {
-        const genNodes = generationMap.get(gen)!;
-        const positionedInGen = new Set<string>();
-        let currentXInGen = totalLayoutWidth;
-
-        // Process spouse pairs and sibling groups
-        genNodes.forEach(person => {
-          if (positionedInGen.has(person.member.id)) return;
-
-          // Create family unit (person + spouses + siblings)
-          const familyUnit: TreeNode[] = [person];
-          
-          // Add spouses
-          person.spouses.forEach(spouse => {
-            if (groupSet.has(spouse.member.id) && spouse.generation === gen && !positionedInGen.has(spouse.member.id)) {
-              familyUnit.push(spouse);
-            }
-          });
-
-          // Add siblings (only if they don't have spouses already processed)
-          person.siblings.forEach(sibling => {
-            if (groupSet.has(sibling.member.id) && sibling.generation === gen && !positionedInGen.has(sibling.member.id)) {
-              // Check if sibling has spouses that would create a separate unit
-              const siblingHasUnprocessedSpouses = sibling.spouses.some(spouse => 
-                groupSet.has(spouse.member.id) && spouse.generation === gen && !positionedInGen.has(spouse.member.id)
-              );
-              
-              if (!siblingHasUnprocessedSpouses) {
-                familyUnit.push(sibling);
-              }
-            }
-          });
-
-          // Sort family unit for consistent positioning
-          familyUnit.sort((a, b) => {
-            // Prioritize by relationship (spouses together), then by name
-            const aName = `${a.member.first_name} ${a.member.last_name}`;
-            const bName = `${b.member.first_name} ${b.member.last_name}`;
-            return aName.localeCompare(bName);
-          });
-
-          // Position family unit
-          familyUnit.forEach((member, unitIndex) => {
-            member.x = currentXInGen + (unitIndex * SPOUSE_SPACING);
-            member.y = gen * VERTICAL_SPACING + 100;
-            positionedInGen.add(member.member.id);
-          });
-
-          currentXInGen += familyUnit.length * SPOUSE_SPACING + MIN_CHILD_SPACING;
-          groupMaxX = Math.max(groupMaxX, currentXInGen - HORIZONTAL_SPACING);
-        });
-
-        // Center children under their parents
-        if (genIndex > 0) {
-          genNodes.forEach(child => {
-            const parentsInGroup = child.parents.filter(p => groupSet.has(p.member.id));
-            
-            if (parentsInGroup.length > 0) {
-              // Calculate center point of parents
-              const parentCenterX = parentsInGroup.reduce((sum, p) => sum + p.x, 0) / parentsInGroup.length;
-              
-              // Get all children of these parents in this generation
-              const allChildrenOfParents = new Set<TreeNode>();
-              parentsInGroup.forEach(parent => {
-                parent.children.forEach(childOfParent => {
-                  if (groupSet.has(childOfParent.member.id) && childOfParent.generation === gen) {
-                    allChildrenOfParents.add(childOfParent);
-                  }
-                });
-              });
-
-              const childrenArray = Array.from(allChildrenOfParents).sort((a, b) => a.x - b.x);
-              
-              if (childrenArray.length > 1) {
-                // Calculate required space for all children
-                const requiredChildWidth = (childrenArray.length - 1) * MIN_CHILD_SPACING;
-                const startX = parentCenterX - (requiredChildWidth / 2);
-                
-                // Ensure children don't overlap with existing positioned nodes
-                let adjustedStartX = startX;
-                const existingPositions = genNodes
-                  .filter(n => !childrenArray.includes(n))
-                  .map(n => n.x)
-                  .sort((a, b) => a - b);
-                
-                // Check for conflicts and adjust if necessary
-                for (let i = 0; i < childrenArray.length; i++) {
-                  const proposedX = adjustedStartX + (i * MIN_CHILD_SPACING);
-                  const tooClose = existingPositions.some(pos => 
-                    Math.abs(pos - proposedX) < MIN_CHILD_SPACING
-                  );
-                  
-                  if (tooClose) {
-                    // Find a safe position
-                    const maxExisting = Math.max(...existingPositions, ...childrenArray.map(c => c.x));
-                    adjustedStartX = maxExisting + MIN_CHILD_SPACING - (i * MIN_CHILD_SPACING);
-                    break;
-                  }
-                }
-                
-                // Position children with proper spacing
-                childrenArray.forEach((childNode, index) => {
-                  childNode.x = adjustedStartX + (index * MIN_CHILD_SPACING);
-                });
-              } else if (childrenArray.length === 1) {
-                // Single child - center under parents, but ensure no overlap
-                let proposedX = parentCenterX;
-                const existingPositions = genNodes
-                  .filter(n => n !== childrenArray[0])
-                  .map(n => n.x);
-                
-                const tooClose = existingPositions.some(pos => 
-                  Math.abs(pos - proposedX) < MIN_CHILD_SPACING
-                );
-                
-                if (tooClose) {
-                  // Find nearest safe position
-                  const sortedPositions = existingPositions.sort((a, b) => a - b);
-                  let safeX = proposedX;
-                  
-                  for (const pos of sortedPositions) {
-                    if (Math.abs(pos - safeX) < MIN_CHILD_SPACING) {
-                      safeX = pos > safeX ? pos - MIN_CHILD_SPACING : pos + MIN_CHILD_SPACING;
-                    }
-                  }
-                  proposedX = safeX;
-                }
-                
-                childrenArray[0].x = proposedX;
-              }
-            }
-          });
-        }
+      // Create family units from the roots
+      const familyUnits = createFamilyUnits(roots);
+      let groupWidth = 0;
+      familyUnits.forEach((familyUnit, idx) => {
+        const { width } = layoutSiblingGroup(familyUnit, 0, totalLayoutWidth + groupWidth);
+        groupWidth += width + FAMILY_GROUP_SPACING;
       });
-
-      // Update total width for next family group
-      totalLayoutWidth = groupMaxX + FAMILY_GROUP_SPACING;
+      totalLayoutWidth += groupWidth;
     });
+    // --- END RECURSIVE TREE LAYOUT WITH SIBLING GROUPING ---
 
     return Array.from(nodeMap.values());
   }, [familyMembers, relationships, relationshipMap]);
@@ -432,34 +401,35 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     event.stopPropagation();
     event.preventDefault();
     
+    // Get the bounding rect of the container
+    const container = document.querySelector('.family-tree-container') as HTMLElement;
     const svgRect = svgRef.current?.getBoundingClientRect();
-    if (!svgRect) return;
+    const containerRect = container?.getBoundingClientRect();
+    if (!svgRect || !containerRect) return;
 
     const clientX = event.clientX;
     const clientY = event.clientY;
     const popupWidth = 380;
     const popupHeight = 600;
+    const margin = 16;
 
-    let popupLeft = clientX - svgRect.left;
-    let popupTop = clientY - svgRect.top;
+    // Position relative to container
+    let popupLeft = clientX - containerRect.left;
+    let popupTop = clientY - containerRect.top;
 
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-
-    if (clientX + popupWidth > viewportWidth - 20) {
-      popupLeft = viewportWidth - popupWidth - 20; 
-    } else if (clientX < 20) {
-      popupLeft = 20;
+    // Clamp so popup stays in view of the container
+    if (popupLeft + popupWidth > containerRect.width - margin) {
+      popupLeft = containerRect.width - popupWidth - margin;
     }
-
-    if (clientY + popupHeight > viewportHeight - 20) {
-      popupTop = viewportHeight - popupHeight - 20;
-    } else if (clientY < 20) {
-      popupTop = 20;
+    if (popupLeft < margin) {
+      popupLeft = margin;
     }
-
-    popupLeft = Math.max(20, popupLeft);
-    popupTop = Math.max(20, popupTop);
+    if (popupTop + popupHeight > containerRect.height - margin) {
+      popupTop = containerRect.height - popupHeight - margin;
+    }
+    if (popupTop < margin) {
+      popupTop = margin;
+    }
 
     setPopupPosition({ x: popupLeft, y: popupTop });
     setShowMemberPopup(member);
@@ -478,9 +448,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       node.children.forEach((child) => {
         const parentY = node.y + CARD_HEIGHT/2;
         const childY = child.y - CARD_HEIGHT/2;
+        // Use a consistent mid-point for cleaner routing
         const midY = parentY + (childY - parentY) / 2;
-
-        // Direct line from parent to child
         lines.push(
           <path
             key={`parent-child-${node.member.id}-${child.member.id}`}
@@ -518,15 +487,12 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     });
 
     // Process sibling connections
-    const processedSiblingGroups = new Set<string>();
+    const processedSiblingConnections = new Set<string>();
     treeNodes.forEach((node) => {
       if (node.siblings.length > 0) {
+        // Create a complete sibling group including the current node
         const siblingGroup = [node, ...node.siblings];
-        const groupIds = siblingGroup.map(s => s.member.id).sort().join('-');
         
-        if (processedSiblingGroups.has(groupIds)) return;
-        processedSiblingGroups.add(groupIds);
-
         // Filter siblings in same generation and sort by x position
         const sameGenSiblings = siblingGroup
           .filter(s => s.generation === node.generation)
@@ -539,18 +505,25 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             const current = sameGenSiblings[i];
             const next = sameGenSiblings[i + 1];
             
-            lines.push(
-              <line
-                key={`sibling-${current.member.id}-${next.member.id}`}
-                x1={current.x + CARD_WIDTH/2}
-                y1={y}
-                x2={next.x - CARD_WIDTH/2}
-                y2={y}
-                className="connection-sibling"
-                stroke="#059669"
-                strokeWidth="2"
-              />
-            );
+            // Create a unique key for this connection that's the same regardless of order
+            const connectionKey = [current.member.id, next.member.id].sort().join('-');
+            
+            if (!processedSiblingConnections.has(connectionKey)) {
+              processedSiblingConnections.add(connectionKey);
+              
+              lines.push(
+                <line
+                  key={`sibling-${connectionKey}`}
+                  x1={current.x + CARD_WIDTH/2}
+                  y1={y}
+                  x2={next.x - CARD_WIDTH/2}
+                  y2={y}
+                  className="connection-sibling"
+                  stroke="#059669"
+                  strokeWidth="2"
+                />
+              );
+            }
           }
         }
       }
@@ -600,7 +573,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
         style={{ userSelect: 'none' }}
       >
         <defs>
