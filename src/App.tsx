@@ -27,7 +27,7 @@ function App() {
     }
     
     isHoveringRef.current = true;
-    console.log('Mouse hover on logo');
+    console.log('Set isHovering to true');
     
     // Clear any existing timeout
     if (hoverTimeoutRef.current) {
@@ -35,17 +35,19 @@ function App() {
       console.log('Cleared existing timeout');
     }
     
-    // Set a new timeout to show the overlay after 3000ms = 3s
+    // Set a new timeout to show the overlay after 300ms
     hoverTimeoutRef.current = setTimeout(() => {
       console.log('Timeout fired, isHovering:', isHoveringRef.current);
       if (isHoveringRef.current) {
         console.log('Showing overlay after delay');
         setShowHoverGif(true);
       }
-    }, 3000);
+    }, 300);
+    console.log('Set new timeout for 300ms');
   };
 
   const handleMouseLeave = () => {
+    console.log('=== MOUSE LEAVE EVENT TRIGGERED ===');
     console.log('Mouse left logo area, isHovering:', isHoveringRef.current);
     
     // Only process if we were actually hovering
