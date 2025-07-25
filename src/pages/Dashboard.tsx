@@ -20,6 +20,7 @@ const Dashboard: React.FC = () => {
   const [showEditMemberForm, setShowEditMemberForm] = useState(false);
   const [memberToEdit, setMemberToEdit] = useState<FamilyMember | null>(null);
   const [selectedFamilyMember, setSelectedFamilyMember] = useState<FamilyMember | null>(null);
+  const [showTree, setShowTree] = useState(true); // Add this line
 
   useEffect(() => {
     if (!user) {
@@ -203,6 +204,13 @@ const Dashboard: React.FC = () => {
           >
             Add New Family Member
           </button>
+          <button
+            onClick={() => setShowTree(true)}
+            className="btn btn-secondary"
+            style={{ marginRight: '10px' }}
+          >
+            Show Family Tree
+          </button>
 
           {selectedFamilyMember && (
             <>
@@ -242,7 +250,8 @@ const Dashboard: React.FC = () => {
             </button>
           </div>
         ) : (
-          <FamilyTree
+          showTree && (
+            <FamilyTree
               familyMembers={familyMembers}
               relationships={relationships}
               onDeleteMember={handleDeleteMember}
@@ -259,7 +268,9 @@ const Dashboard: React.FC = () => {
                 setShowAddRelationFormMode('add_existing_relation');
               }}
               onEditMember={handleEditMember}
+              onCloseTreeView={() => setShowTree(false)}
             />
+          )
         )}
 
         {familyMembers.length > 0 && (

@@ -13,6 +13,7 @@ interface FamilyTreeProps {
   onAddRelatedMember: (member: FamilyMember) => void;
   onAddExistingRelationship: (member: FamilyMember) => void;
   onEditMember: (member: FamilyMember) => void;
+  onCloseTreeView?: () => void; // Optional close handler
 }
 
 interface TreeNode {
@@ -25,6 +26,8 @@ interface TreeNode {
   spouses: TreeNode[];
   siblings: TreeNode[];
   processed: boolean;
+  spouseOf?: TreeNode; // Track which blood relative this spouse belongs to
+  isSpouse?: boolean; // Flag to identify spouses
 }
 
 const FamilyTree: React.FC<FamilyTreeProps> = ({
@@ -37,6 +40,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   onAddMember,
   onAddRelatedMember,
   onAddExistingRelationship,
+  onEditMember,
+  onCloseTreeView
   onEditMember
 }) => {
   const [zoom, setZoom] = useState(1);
@@ -46,6 +51,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   const [showMemberPopup, setShowMemberPopup] = useState<FamilyMember | null>(null);
   const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const svgRef = useRef<SVGSVGElement>(null);
 
   // Layout constants
@@ -62,6 +68,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   useEffect(() => {
     const handleResize = () => {
       setDimensions({ width: window.innerWidth, height: window.innerHeight });
+      setIsMobile(window.innerWidth <= 768);
     };
 
     window.addEventListener('resize', handleResize);
@@ -204,6 +211,11 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       }
     });
 
+    console.log('Family groups found:', familyGroups.map((group, idx) => ({
+      groupIndex: idx,
+      members: group.map(n => `${n.member.first_name} (parents: ${n.parents.map(p => p.member.first_name).join(',')})`)
+    })));
+
     // --- RECURSIVE TREE LAYOUT WITH SIBLING GROUPING ---
     let totalLayoutWidth = 100;
     // Helper to get a unique key for a set of parents
@@ -244,13 +256,92 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         familyUnit.forEach(member => {
           member.spouses.forEach(spouse => {
             if (!processed.has(spouse.member.id) && !familyUnit.some(m => m.member.id === spouse.member.id)) {
+
+              console.log(`Checking spouse ${spouse.member.first_name} of ${member.member.first_name}`);
+              
+              // Check if this person has ANY blood relationships (parent/child/sibling) with ANYONE in the family unit
+              const hasBloodRelationship = familyUnit.some(familyMember => {
+                const hasParentChild = familyMember.children.some(child => child.member.id === spouse.member.id) ||
+                  familyMember.parents.some(parent => parent.member.id === spouse.member.id) ||
+                  spouse.children.some(child => child.member.id === familyMember.member.id) ||
+                  spouse.parents.some(parent => parent.member.id === familyMember.member.id);
+                
+                const hasSibling = familyMember.siblings.some(sibling => sibling.member.id === spouse.member.id) ||
+                  spouse.siblings.some(sibling => sibling.member.id === familyMember.member.id);
+                
+                if (hasParentChild || hasSibling) {
+                  console.log(`${spouse.member.first_name} has blood relationship with ${familyMember.member.first_name}: parentChild=${hasParentChild}, sibling=${hasSibling}`);
+                }
+                
+                return hasParentChild || hasSibling;
+              });
+              
+              // Check if they share children (indicating they're spouses regardless of blood relationship)
+              const hasSharedChildren = member.children.some(child => 
+                spouse.children.some(spouseChild => spouseChild.member.id === child.member.id)
+              );
+              
+              if (!hasBloodRelationship || hasSharedChildren) {
+                // Mark as spouse if they have NO blood relationships OR if they share children
+                spouse.isSpouse = true;
+                spouse.spouseOf = member;
+                spousesToAdd.push(spouse);
+                processed.add(spouse.member.id);
+                console.log(`${spouse.member.first_name} marked as spouse of ${member.member.first_name} (shared children: ${hasSharedChildren})`);
+              } else {
+                // This is a blood relative with no shared children - add them to the family unit as a blood relative
+                console.log(`${spouse.member.first_name} is a blood relative, adding to family unit`);
+                familyUnit.push(spouse);
+                processed.add(spouse.member.id);
+              }
+
               spousesToAdd.push(spouse);
               processed.add(spouse.member.id);
+
             }
           });
         });
         familyUnit.push(...spousesToAdd);
         
+
+        // Sort the family unit: prioritize spouses with shared children, then by family structure
+        familyUnit.sort((a, b) => {
+          // First, check if they share children (are spouses)
+          const aChildren = a.children.map(c => c.member.id);
+          const bChildren = b.children.map(c => c.member.id);
+          const sharedChildren = aChildren.filter(id => bChildren.includes(id));
+          
+          if (sharedChildren.length > 0) {
+            // They are spouses with shared children
+            // Calculate individual subtree weights (excluding shared children)
+            const calculateIndividualWeight = (node: TreeNode, sharedChildIds: string[]): number => {
+              if (node.children.length === 0) return 0;
+              
+              let weight = 0;
+              node.children.forEach(child => {
+                if (!sharedChildIds.includes(child.member.id)) {
+                  weight += 1; // Count individual children
+                  weight += calculateIndividualWeight(child, sharedChildIds);
+                }
+              });
+              return weight;
+            };
+            
+            const aIndividualWeight = calculateIndividualWeight(a, sharedChildren);
+            const bIndividualWeight = calculateIndividualWeight(b, sharedChildren);
+            
+            // Position the person with more individual children/descendants on the right
+            if (aIndividualWeight !== bIndividualWeight) {
+              return aIndividualWeight - bIndividualWeight; // More individual children on the right
+            } else {
+              // If equal individual weight, position by birth date (earlier on left)
+              const aDate = a.member.birth_date || '1900-01-01';
+              const bDate = b.member.birth_date || '1900-01-01';
+              return aDate.localeCompare(bDate);
+            }
+          }
+          
+          // If they don't share children, check if they're siblings
         // Sort the family unit: siblings first (by birth date), then spouses
         familyUnit.sort((a, b) => {
           // Check if both are siblings (have same parents)
@@ -263,8 +354,32 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           if (aIsSibling && !bIsSibling) return -1;
           if (!aIsSibling && bIsSibling) return 1;
           
+          // If both are siblings, sort by family structure (children first, then birth date)
+          if (aIsSibling && bIsSibling) {
+            // Calculate the "weight" of each sibling based on their children and descendants
+            const calculateSubtreeWeight = (node: TreeNode): number => {
+              if (node.children.length === 0) return 0;
+              
+              let weight = node.children.length;
+              node.children.forEach(child => {
+                weight += calculateSubtreeWeight(child);
+              });
+              return weight;
+            };
+            
+            const aWeight = calculateSubtreeWeight(a);
+            const bWeight = calculateSubtreeWeight(b);
+            
+            // Position the person with more children/descendants on the right
+            if (aWeight !== bWeight) {
+              return aWeight - bWeight; // More children on the right
+            }
+            
+            // If equal family size, sort by birth date (earlier on left)
+
           // If both are siblings, sort by birth date
           if (aIsSibling && bIsSibling) {
+
             const aDate = a.member.birth_date || '1900-01-01';
             const bDate = b.member.birth_date || '1900-01-01';
             return aDate.localeCompare(bDate);
@@ -286,6 +401,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             }
           }
           
+
+          // For any remaining cases, sort by birth date to ensure consistent ordering
+
           // Special case: If Billy and Christine are in the same family unit, put Billy first
           if (a.member.first_name === 'Billy' && b.member.first_name === 'Christine') return -1;
           if (a.member.first_name === 'Christine' && b.member.first_name === 'Billy') return 1;
@@ -348,10 +466,233 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       if (roots.length === 0 && group.length > 0) {
         // If no clear root, pick the person with the earliest birth date
         const sortedByAge = [...group].sort((a, b) => {
+
           const aDate = a.member.birth_date || '1900-01-01';
           const bDate = b.member.birth_date || '1900-01-01';
           return aDate.localeCompare(bDate);
         });
+        
+        familyUnits.push(familyUnit);
+      });
+      
+      // Debug: Log the family units to see what's happening
+      console.log('Family units created:', familyUnits.map(unit => 
+        unit.map(member => `${member.member.first_name} (isSpouse: ${member.isSpouse}, spouseOf: ${member.spouseOf?.member.first_name || 'none'}, children: ${member.children.map(c => c.member.first_name).join(',')})`)
+      ));
+      
+      return familyUnits;
+    }
+    // Recursive layout for a sibling group
+    const layoutSiblingGroup = (siblings: TreeNode[], depth: number, xOffset: number): { width: number, centers: number[] } => {
+      // Separate blood relatives from spouses
+      const bloodRelatives = siblings.filter(sib => !sib.isSpouse);
+      const spouses = siblings.filter(sib => sib.isSpouse);
+      
+      // Sort blood relatives to minimize line crossings and accommodate spouses
+      bloodRelatives.sort((a, b) => {
+        // First priority: family members with spouses go to the left
+        const aHasSpouse = a.spouses.length > 0;
+        const bHasSpouse = b.spouses.length > 0;
+        
+        if (aHasSpouse && !bHasSpouse) return -1; // A has spouse, B doesn't - A goes left
+        if (!aHasSpouse && bHasSpouse) return 1;  // B has spouse, A doesn't - B goes left
+        
+        // If both have spouses or both don't have spouses, use subtree width
+        const calculateSubtreeWidth = (node: TreeNode): number => {
+          if (node.children.length === 0) return CARD_WIDTH;
+          
+          // Group children by their parents to calculate width
+          const childGroups = groupSiblingsByParents(node.children);
+          let totalWidth = 0;
+          
+          childGroups.forEach((group, idx) => {
+            // Estimate width for each child group
+            totalWidth += group.length * CARD_WIDTH + (group.length - 1) * CHILD_GAP;
+            if (idx < childGroups.length - 1) totalWidth += CHILD_GAP;
+          });
+          
+          return Math.max(CARD_WIDTH, totalWidth);
+        };
+        
+        const aWidth = calculateSubtreeWidth(a);
+        const bWidth = calculateSubtreeWidth(b);
+        
+        // Position siblings with wider subtrees on the right to minimize line crossings
+        if (aWidth !== bWidth) {
+          return aWidth - bWidth; // Wider subtree on the right
+        }
+        
+        // If subtree widths are equal, use birth date as tiebreaker
+        const aDate = a.member.birth_date || '1900-01-01';
+        const bDate = b.member.birth_date || '1900-01-01';
+        return aDate.localeCompare(bDate);
+      });
+      
+      let groupWidth = 0;
+      const centers: number[] = [];
+      let currentX = xOffset;
+      
+      // Calculate total width needed for all blood relatives first
+      const bloodRelativeWidths: number[] = [];
+      bloodRelatives.forEach((sib) => {
+        const sibChildrenGroups = groupSiblingsByParents(sib.children);
+        let sibSubtreeWidth = CARD_WIDTH;
+        if (sibChildrenGroups.length > 0 && sib.children.length > 0) {
+          let childrenBlockWidth = 0;
+          sibChildrenGroups.forEach((childGroup, gidx) => {
+            const { width: groupW } = layoutSiblingGroup(childGroup, depth + 1, 0); // Calculate width only
+            childrenBlockWidth += groupW;
+            if (gidx < sibChildrenGroups.length - 1) childrenBlockWidth += CHILD_GAP;
+          });
+          sibSubtreeWidth = Math.max(CARD_WIDTH, childrenBlockWidth);
+        }
+        bloodRelativeWidths.push(sibSubtreeWidth);
+      });
+      
+      // Calculate total spacing needed between siblings based on their children
+      let totalSpacingNeeded = 0;
+      for (let i = 0; i < bloodRelatives.length - 1; i++) {
+        const thisSib = bloodRelatives[i];
+        const nextSib = bloodRelatives[i + 1];
+        
+        const thisChildCount = thisSib.children.length;
+        const nextChildCount = nextSib.children.length;
+        const totalChildCount = thisChildCount + nextChildCount;
+        
+        // Base gap increases with more children to prevent line crossings
+        let spacingGap = CHILD_GAP;
+        
+        if (totalChildCount > 0) {
+          // Increase spacing based on total number of children between siblings
+          spacingGap = CHILD_GAP + (totalChildCount * 20); // 20px extra per child
+          
+          // Additional spacing if both siblings have children
+          if (thisChildCount > 0 && nextChildCount > 0) {
+            spacingGap += CHILD_GAP * 1.5; // Extra 50% gap when both have children
+          }
+          
+          // Even more spacing if either sibling has many children
+          if (thisChildCount >= 3 || nextChildCount >= 3) {
+            spacingGap += CHILD_GAP * 2; // Extra spacing for families with 3+ children
+          }
+        }
+        
+        totalSpacingNeeded += spacingGap;
+      }
+      
+      // Calculate total width needed including extra spacing
+      const totalBloodRelativeWidth = bloodRelativeWidths.reduce((sum, width) => sum + width, 0) + totalSpacingNeeded;
+      
+      // Add space for spouses on the left
+      const spouseSpace = spouses.length * 100; // Space for spouses
+      const totalWidth = totalBloodRelativeWidth + spouseSpace;
+      
+      // Start positioning from the left, accounting for spouse space
+      currentX = xOffset + spouseSpace;
+      
+      // Layout blood relatives
+      bloodRelatives.forEach((sib, idx) => {
+        const sibChildrenGroups = groupSiblingsByParents(sib.children);
+        let sibSubtreeWidth = CARD_WIDTH;
+        let sibCenter = currentX + CARD_WIDTH / 2;
+        
+        if (sibChildrenGroups.length > 0 && sib.children.length > 0) {
+          // Lay out all child sibling groups for this sibling
+          let childrenBlockWidth = 0;
+          sibChildrenGroups.forEach((childGroup, gidx) => {
+            const { width: groupW } = layoutSiblingGroup(childGroup, depth + 1, currentX + childrenBlockWidth);
+            childrenBlockWidth += groupW;
+            if (gidx < sibChildrenGroups.length - 1) childrenBlockWidth += CHILD_GAP;
+          });
+          sibSubtreeWidth = Math.max(CARD_WIDTH, childrenBlockWidth);
+          sibCenter = currentX + sibSubtreeWidth / 2;
+        }
+        
+        // Position siblings with calculated spacing
+        if (idx < bloodRelatives.length - 1) {
+          const nextSib = bloodRelatives[idx + 1];
+          
+          // Calculate spacing based on number of children each sibling has
+          const thisChildCount = sib.children.length;
+          const nextChildCount = nextSib.children.length;
+          const totalChildCount = thisChildCount + nextChildCount;
+          
+          // Base gap increases with more children to prevent line crossings
+          let spacingGap = CHILD_GAP;
+          
+          if (totalChildCount > 0) {
+            // Increase spacing based on total number of children between siblings
+            spacingGap = CHILD_GAP + (totalChildCount * 20); // 20px extra per child
+            
+            // Additional spacing if both siblings have children
+            if (thisChildCount > 0 && nextChildCount > 0) {
+              spacingGap += CHILD_GAP * 1.5; // Extra 50% gap when both have children
+            }
+            
+            // Even more spacing if either sibling has many children
+            if (thisChildCount >= 3 || nextChildCount >= 3) {
+              spacingGap += CHILD_GAP * 2; // Extra spacing for families with 3+ children
+            }
+          }
+          
+          currentX += sibSubtreeWidth + spacingGap;
+        } else {
+          currentX += sibSubtreeWidth;
+        }
+        
+        sib.x = sibCenter;
+        sib.y = depth * VERTICAL_SPACING + 100;
+        centers.push(sibCenter);
+      });
+      
+      // Position spouses to the left of their blood relatives, avoiding conflicts
+      spouses.forEach((spouse, idx) => {
+        if (spouse.spouseOf) {
+          // Position spouse behind and to the left of their blood relative with proper spacing
+          const spouseX = spouse.spouseOf.x - 150 - (idx * 30); // More space and stagger multiple spouses
+          spouse.x = spouseX;
+          spouse.y = spouse.spouseOf.y; // Same y position (behind)
+        }
+      });
+      
+      return { width: totalWidth, centers };
+    };
+    // Main layout for each family group
+    familyGroups.forEach((group, groupIndex) => {
+      // Find root nodes (oldest generation - those with no parents in this group)
+      const groupSet = new Set(group.map(n => n.member.id));
+      const roots = group.filter(n => 
+        n.parents.filter(p => groupSet.has(p.member.id)).length === 0
+      );
+      
+      console.log(`Family group ${groupIndex}: Found ${roots.length} root nodes:`, 
+        roots.map(r => `${r.member.first_name} ${r.member.last_name}`));
+      
+      console.log(`Family group ${groupIndex}: All members and their parents:`, 
+        group.map(n => `${n.member.first_name} -> parents: [${n.parents.map(p => p.member.first_name).join(', ')}]`));
+      
+      if (roots.length === 0 && group.length > 0) {
+        // If no clear root, pick the person with the earliest birth date
+        const sortedByAge = [...group].sort((a, b) => {
+          const aDate = a.member.birth_date || '1900-01-01';
+          const bDate = b.member.birth_date || '1900-01-01';
+          return aDate.localeCompare(bDate);
+        });
+        roots.push(sortedByAge[0]);
+        console.log(`Family group ${groupIndex}: No roots found, using oldest: ${sortedByAge[0].member.first_name}`);
+      }
+      
+      // Create family units from the roots
+      const familyUnits = createFamilyUnits(roots);
+      let groupWidth = 0;
+      familyUnits.forEach((familyUnit, idx) => {
+        const { width } = layoutSiblingGroup(familyUnit, 0, totalLayoutWidth + groupWidth);
+        groupWidth += width + FAMILY_GROUP_SPACING;
+      });
+      totalLayoutWidth += groupWidth;
+    });
+    // --- END RECURSIVE TREE LAYOUT WITH SIBLING GROUPING --
+
         roots.push(sortedByAge[0]);
       }
       
@@ -368,6 +709,46 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     return Array.from(nodeMap.values());
   }, [familyMembers, relationships, relationshipMap]);
+
+  // Auto-fit tree to mobile screen on initial load
+  useEffect(() => {
+    if (window.innerWidth > 768) return; // Only run on mobile
+    if (!svgRef.current || treeNodes.length === 0) return;
+
+    // Find bounds of all nodes
+    const minX = Math.min(...treeNodes.map(n => n.x));
+    const maxX = Math.max(...treeNodes.map(n => n.x));
+    const minY = Math.min(...treeNodes.map(n => n.y));
+    const maxY = Math.max(...treeNodes.map(n => n.y));
+
+    const treeWidth = maxX - minX + 180; // CARD_WIDTH
+    const treeHeight = maxY - minY + 120; // CARD_HEIGHT
+
+    const screenW = window.innerWidth;
+    const screenH = window.innerHeight;
+
+    // Calculate best zoom to fit with minimal padding
+    const zoomX = (screenW * 0.95) / treeWidth;
+    const zoomY = (screenH * 0.95) / treeHeight;
+    const fitZoom = Math.max(0.8, Math.min(zoomX, zoomY, 1.0)); // Min zoom 0.8, max 1.0
+
+    setZoom(fitZoom);
+    // Center the tree
+    setPan({
+      x: (screenW / 2) - ((minX + maxX) / 2) * fitZoom,
+      y: (screenH / 2) - ((minY + maxY) / 2) * fitZoom
+    });
+  }, [treeNodes]);
+
+  // Add/remove body class for mobile tree view
+  useEffect(() => {
+    if (isMobile) {
+      document.body.classList.add('tree-view-active');
+      return () => {
+        document.body.classList.remove('tree-view-active');
+      };
+    }
+  }, [isMobile]);
 
   // Handle mouse events for pan and zoom
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -399,18 +780,81 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     setZoom(prev => Math.max(0.1, Math.min(3, prev * delta)));
   }, []);
 
-  const handleMemberClick = (member: FamilyMember, event: React.MouseEvent) => {
+  // Handle touch events for mobile
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const target = e.target as Element;
+    // Only handle touch events on the SVG background, not on member cards
+    if (target === svgRef.current || target.tagName === 'svg') {
+      if (e.touches.length === 1) {
+        // Single touch - start panning
+        setIsDragging(true);
+        setDragStart({ 
+          x: e.touches[0].clientX - pan.x, 
+          y: e.touches[0].clientY - pan.y 
+        });
+      }
+    }
+  }, [pan]);
+
+  const handleTouchEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const handler = (e: TouchEvent) => {
+      if (isDragging && e.touches.length === 1) {
+        e.preventDefault();
+        setPan({
+          x: e.touches[0].clientX - dragStart.x,
+          y: e.touches[0].clientY - dragStart.y
+        });
+      }
+    };
+    svg.addEventListener('touchmove', handler, { passive: false });
+    return () => svg.removeEventListener('touchmove', handler);
+  }, [isDragging, dragStart]);
+
+  const handleMemberClick = (member: FamilyMember, event: React.MouseEvent | React.TouchEvent) => {
+    // Stop propagation to prevent SVG touch events from interfering
     event.stopPropagation();
     event.preventDefault();
     
+    // Prevent the touch from triggering panning
+    if ('touches' in event) {
+      setIsDragging(false);
+    }
+    
+    // Check if we're on a mobile device
+    const isMobile = window.innerWidth <= 768;
+    
+    if (isMobile) {
+      // On mobile, always center the popup - don't set position, let CSS handle it
+      setShowMemberPopup(member);
+      onSelectMember(member);
+      return;
+    }
+    
+    // Desktop positioning logic
     // Get the bounding rect of the container
     const container = document.querySelector('.family-tree-container') as HTMLElement;
     const svgRect = svgRef.current?.getBoundingClientRect();
     const containerRect = container?.getBoundingClientRect();
     if (!svgRect || !containerRect) return;
 
-    const clientX = event.clientX;
-    const clientY = event.clientY;
+    // Handle both mouse and touch events
+    let clientX: number, clientY: number;
+    if ('touches' in event) {
+      // Touch event
+      clientX = event.touches[0].clientX;
+      clientY = event.touches[0].clientY;
+    } else {
+      // Mouse event
+      clientX = event.clientX;
+      clientY = event.clientY;
+    }
+
     const popupWidth = 380;
     const popupHeight = 600;
     const margin = 16;
@@ -545,6 +989,25 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
   return (
     <div className="family-tree-container">
+      {/* Mobile close button */}
+      {isMobile && (
+        <button
+          className="treeview-close-btn"
+          onClick={() => {
+            if (onCloseTreeView) {
+              onCloseTreeView();
+            } else {
+              // Fallback: reset view if no close handler provided
+              setZoom(1);
+              setPan({ x: 0, y: 0 });
+              console.log('Close button clicked - no handler provided');
+            }
+          }}
+          aria-label="Close family tree"
+        >
+          ×
+        </button>
+      )}
       <div className="family-tree-controls">
         <button
           onClick={() => setZoom(prev => Math.min(3, prev * 1.2))}
@@ -575,6 +1038,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
         style={{ userSelect: 'none' }}
       >
         <defs>
@@ -596,13 +1061,178 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
           {generateConnections()}
 
-          {treeNodes.map(node => (
+          {/* Render spouses first (behind) */}
+          {treeNodes.filter(node => node.isSpouse).map(node => (
+            <g 
+              key={node.member.id} 
+              transform={`translate(${node.x - CARD_WIDTH/2}, ${node.y - CARD_HEIGHT/2})`}
+              className={`member-card ${selectedMember?.id === node.member.id ? 'selected' : ''} ${node.isSpouse ? 'spouse-card' : ''}`}
+              onClick={(e) => handleMemberClick(node.member, e)}
+              style={{ 
+                cursor: 'pointer', 
+                pointerEvents: 'all',
+                zIndex: node.isSpouse ? '1' : '2'
+              }}
+            >
+              {/* Card background with shadow */}
+              <rect
+                width={CARD_WIDTH}
+                height={CARD_HEIGHT}
+                rx="12"
+                fill={selectedMember?.id === node.member.id ? '#EEF2FF' : '#FFFFFF'}
+                stroke={(() => {
+                  if (selectedMember?.id === node.member.id) {
+                    return '#6366F1'; // Selected state takes priority
+                  }
+                  // Gender-based outline colors
+                  switch (node.member.gender) {
+                    case 'male':
+                      return '#3B82F6'; // Blue for males
+                    case 'female':
+                      return '#EC4899'; // Pink for females
+                    case 'other':
+                      return '#10B981'; // Green for other
+                    default:
+                      return '#E5E7EB'; // Default gray
+                  }
+                })()}
+                strokeWidth={selectedMember?.id === node.member.id ? '3' : '2'}
+                filter="url(#cardShadow)"
+                style={{ pointerEvents: 'all' }}
+              />
+              
+              {/* Plus button for adding relationships */}
+              <circle
+                cx={CARD_WIDTH - 15}
+                cy={15}
+                r="10"
+                fill="#3B82F6"
+                stroke="#FFFFFF"
+                strokeWidth="2"
+                style={{ cursor: 'pointer' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddRelatedMember(node.member);
+                }}
+              />
+              <text
+                x={CARD_WIDTH - 15}
+                y={20}
+                textAnchor="middle"
+                fill="white"
+                fontSize="14"
+                fontWeight="bold"
+                style={{ pointerEvents: 'none' }}
+              >
+                +
+              </text>
+              
+
+              
+              {/* Member name */}
+              <text
+                x="30"
+                y="25"
+                textAnchor="start"
+                className="member-name-first spouse-name"
+                fill="#1F2937"
+                fontSize="14"
+                fontWeight="600"
+                style={{ pointerEvents: 'none' }}
+              >
+                {node.member.first_name}
+              </text>
+              <text
+                x="30"
+                y="42"
+                textAnchor="start"
+                className="member-name-last spouse-name"
+                fill="#1F2937"
+                fontSize="14"
+                fontWeight="600"
+                style={{ pointerEvents: 'none' }}
+              >
+                {node.member.last_name}
+              </text>
+              
+              {/* Birth year */}
+              {node.member.birth_date && (
+                <text
+                  x={CARD_WIDTH/2}
+                  y="60"
+                  textAnchor="middle"
+                  className="member-date"
+                  fill="#6B7280"
+                  fontSize="11"
+                  style={{ pointerEvents: 'none' }}
+                >
+                  Born: {new Date(node.member.birth_date).getFullYear()}
+                </text>
+              )}
+              
+              {/* Death year */}
+              {node.member.death_date && (
+                <text
+                  x={CARD_WIDTH/2}
+                  y={node.member.birth_date ? "75" : "60"}
+                  textAnchor="middle"
+                  className="member-date"
+                  fill="#6B7280"
+                  fontSize="11"
+                  style={{ pointerEvents: 'none' }}
+                >
+                  Died: {new Date(node.member.death_date).getFullYear()}
+                </text>
+              )}
+
+              {/* Gender icon */}
+              <text
+                x={CARD_WIDTH - 20}
+                y={CARD_HEIGHT - 15}
+                textAnchor="middle"
+                className="member-gender-icon"
+                fill={(() => {
+                  switch (node.member.gender) {
+                    case 'male':
+                      return '#3B82F6'; // Blue for males
+                    case 'female':
+                      return '#EC4899'; // Pink for females
+                    case 'other':
+                      return '#10B981'; // Green for other
+                    default:
+                      return '#9CA3AF'; // Default gray
+                  }
+                })()}
+                fontSize="14"
+                fontWeight="bold"
+                style={{ pointerEvents: 'none' }}
+              >
+                {node.member.gender === 'male' ? '♂' : node.member.gender === 'female' ? '♀' : '⚧'}
+              </text>
+
+              {/* Living indicator */}
+              {!node.member.death_date && (
+                <circle
+                  cx={15}
+                  cy={CARD_HEIGHT - 15}
+                  r="4"
+                  fill="#3B82F6"
+                />
+              )}
+            </g>
+          ))}
+
+          {/* Render blood relatives last (on top) */}
+          {treeNodes.filter(node => !node.isSpouse).map(node => (
             <g 
               key={node.member.id} 
               transform={`translate(${node.x - CARD_WIDTH/2}, ${node.y - CARD_HEIGHT/2})`}
               className={`member-card ${selectedMember?.id === node.member.id ? 'selected' : ''}`}
               onClick={(e) => handleMemberClick(node.member, e)}
-              style={{ cursor: 'pointer', pointerEvents: 'all' }}
+              style={{ 
+                cursor: 'pointer', 
+                pointerEvents: 'all'
+              }}
             >
               {/* Card background with shadow */}
               <rect
@@ -779,13 +1409,27 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
       {/* Member popup */}
       {showMemberPopup && (
-        <div
-          className="member-popup"
-          style={{
-            left: popupPosition.x,
-            top: popupPosition.y,
-          }}
-        >
+        <>
+          {/* Backdrop overlay */}
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.5)',
+              zIndex: 1000,
+            }}
+            onClick={closePopup}
+          />
+          <div
+            className="member-popup"
+            style={{
+              left: window.innerWidth <= 768 ? undefined : popupPosition.x,
+              top: window.innerWidth <= 768 ? undefined : popupPosition.y,
+            }}
+          >
           <div className="popup-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <h3 className="popup-title">
@@ -822,6 +1466,60 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             >
               ×
             </button>
+          </div>
+
+          {/* Member Information */}
+          <div className="member-info-section">
+            <h4 className="member-info-title">Member Information</h4>
+            <div className="member-info-grid">
+              <div className="member-info-item">
+                <span className="member-info-label">Gender:</span>
+                <span className="member-info-value">
+                  <span 
+                    style={{ 
+                      color: (() => {
+                        switch (showMemberPopup.gender) {
+                          case 'male': return '#3B82F6';
+                          case 'female': return '#EC4899';
+                          case 'other': return '#10B981';
+                          default: return '#9CA3AF';
+                        }
+                      })(),
+                      fontWeight: 'bold',
+                      fontSize: '16px'
+                    }}
+                  >
+                    {showMemberPopup.gender === 'male' ? '♂ Male' : 
+                     showMemberPopup.gender === 'female' ? '♀ Female' : 
+                     showMemberPopup.gender === 'other' ? '⚧ Other' : 'Not specified'}
+                  </span>
+                </span>
+              </div>
+              {showMemberPopup.birth_date && (
+                <div className="member-info-item">
+                  <span className="member-info-label">Birth Date:</span>
+                  <span className="member-info-value">
+                    {new Date(showMemberPopup.birth_date).toLocaleDateString()}
+                  </span>
+                </div>
+              )}
+              {showMemberPopup.death_date && (
+                <div className="member-info-item">
+                  <span className="member-info-label">Death Date:</span>
+                  <span className="member-info-value">
+                    {new Date(showMemberPopup.death_date).toLocaleDateString()}
+                  </span>
+                </div>
+              )}
+              {showMemberPopup.notes && (
+                <div className="member-info-item full-width">
+                  <span className="member-info-label">Notes:</span>
+                  <span className="member-info-value">
+                    {showMemberPopup.notes}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="relationships-section">
@@ -935,6 +1633,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             </button>
           </div>
         </div>
+        </>
       )}
     </div>
   );
