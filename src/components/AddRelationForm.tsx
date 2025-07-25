@@ -44,19 +44,15 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
     selectedFamilyMember: FamilyMember, 
     relationshipType: string
   ) => {
-    console.log('Auto-relationships: Processing for', selectedFamilyMember.first_name, 'with new member', newMember.first_name);
     
     // 1. SIBLING RELATIONSHIPS
     if (relationshipType === 'sibling') {
-      console.log('Auto-sibling: Processing sibling relationship for', selectedFamilyMember.first_name);
       
       // Find all existing siblings of the selected family member
       const existingSiblingRelationships = existingRelationships.filter(rel =>
         (rel.person1_id === selectedFamilyMember.id || rel.person2_id === selectedFamilyMember.id) &&
         rel.relationship_type === 'sibling'
       );
-
-      console.log('Auto-sibling: Found existing sibling relationships:', existingSiblingRelationships.length);
 
       // Get the IDs of all existing siblings
       const existingSiblingIds = existingSiblingRelationships.map(rel => {
@@ -66,8 +62,6 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
           return rel.person1_id;
         }
       });
-
-      console.log('Auto-sibling: Existing sibling IDs:', existingSiblingIds);
 
       // Create sibling relationships between the new member and all existing siblings
       for (const siblingId of existingSiblingIds) {
@@ -101,15 +95,12 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
 
     // 2. SPOUSE RELATIONSHIPS - Auto-create parent relationships for existing children
     if (relationshipType === 'spouse') {
-      console.log('Auto-spouse: Processing spouse relationship');
       
       // Find all children of the selected family member
       const childrenOfSelected = existingRelationships.filter(rel =>
         (rel.person1_id === selectedFamilyMember.id || rel.person2_id === selectedFamilyMember.id) &&
         rel.relationship_type === 'parent'
       );
-
-      console.log('Auto-spouse: Found children of selected member:', childrenOfSelected.length);
 
       // For each child, create a parent relationship with the new spouse
       for (const childRel of childrenOfSelected) {
@@ -148,8 +139,6 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
         rel.relationship_type === 'parent'
       );
 
-      console.log('Auto-spouse: Found children of new member:', childrenOfNewMember.length);
-
       for (const childRel of childrenOfNewMember) {
         const childId = childRel.person1_id === newMember.id ? childRel.person2_id : childRel.person1_id;
         
@@ -183,26 +172,21 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
 
     // 3. PARENT RELATIONSHIPS - Only create the specific parent-child relationship requested
     if (relationshipType === 'parent') {
-      console.log('Auto-parent: Processing parent relationship - ONLY creating the requested relationship');
       
       // Only create the specific parent-child relationship that was requested
       // Don't automatically make the new parent a parent to all siblings
       // This prevents creating incorrect relationships
       
-      console.log('Auto-parent: Only creating parent-child relationship between', newMember.first_name, 'and', selectedFamilyMember.first_name);
     }
 
     // 4. CHILD RELATIONSHIPS - Auto-create sibling relationships with existing children
     if (relationshipType === 'child') {
-      console.log('Auto-child: Processing child relationship');
       
       // Find all existing children of the selected family member
       // Only look for relationships where selectedFamilyMember is the PARENT (person1_id)
       const existingChildren = existingRelationships.filter(rel =>
         rel.person1_id === selectedFamilyMember.id && rel.relationship_type === 'parent'
       );
-
-      console.log('Auto-child: Found existing children:', existingChildren.length);
 
       // Create sibling relationships between the new child and all existing children
       for (const childRel of existingChildren) {
@@ -435,20 +419,21 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
   };
 
   return (
-    <div className="card">
-      <div className="card-body">
+    <div className="card" style={{ padding: '10px', margin: '0' }}>
+      <div className="card-body" style={{ padding: '10px' }}>
+        
         {mode === 'add_new_related' && (
-          <h5 className="card-title">Add New Member {selectedFamilyMember ? `to ${selectedFamilyMember.first_name} ${selectedFamilyMember.last_name}` : ''}</h5>
+          <h5 className="card-title" style={{ fontSize: '16px', marginBottom: '15px' }}>Add New Member {selectedFamilyMember ? `to ${selectedFamilyMember.first_name} ${selectedFamilyMember.last_name}` : ''}</h5>
         )}
         {mode === 'add_existing_relation' && (
-          <h5 className="card-title">Add Existing Relationship</h5>
+          <h5 className="card-title" style={{ fontSize: '16px', marginBottom: '15px' }}>Add Existing Relationship</h5>
         )}
         
         {error && <div className="alert alert-danger">{error}</div>}
         <form onSubmit={handleSubmit}>
           {mode === 'add_new_related' && (
             <>
-              <div className="mb-3">
+              <div className="mb-3" style={{ marginBottom: '10px' }}>
                 <label htmlFor="newMemberFirstName" className="form-label">First Name</label>
                 <input
                   type="text"
@@ -459,7 +444,7 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
                   required
                 />
               </div>
-              <div className="mb-3">
+              <div className="mb-3" style={{ marginBottom: '10px' }}>
                 <label htmlFor="newMemberLastName" className="form-label">Last Name</label>
                 <input
                   type="text"
@@ -470,7 +455,7 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
                   required
                 />
               </div>
-              <div className="mb-3">
+              <div className="mb-3" style={{ marginBottom: '10px' }}>
                 <label htmlFor="newMemberBirthDate" className="form-label">Birth Date (Optional)</label>
                 <input
                   type="date"
@@ -480,7 +465,7 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
                   onChange={(e) => setBirthDate(e.target.value)}
                 />
               </div>
-              <div className="mb-3">
+              <div className="mb-3" style={{ marginBottom: '10px' }}>
                 <label htmlFor="newMemberDeathDate" className="form-label">Death Date (Optional)</label>
                 <input
                   type="date"
@@ -490,7 +475,7 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
                   onChange={(e) => setDeathDate(e.target.value)}
                 />
               </div>
-              <div className="mb-3">
+              <div className="mb-3" style={{ marginBottom: '10px' }}>
                 <label htmlFor="newMemberGender" className="form-label">Gender (Optional)</label>
                 <select
                   className="form-select"
@@ -506,7 +491,7 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
               </div>
 
               {selectedFamilyMember && (
-                <div className="mb-3">
+                <div className="mb-3" style={{ marginBottom: '10px' }}>
                   <label htmlFor="newRelatedRelationshipType" className="form-label">Relationship to {selectedFamilyMember.first_name}</label>
                   <select
                     className="form-select"
@@ -528,7 +513,7 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
 
           {mode === 'add_existing_relation' && (
             <>
-              <div className="mb-3">
+              <div className="mb-3" style={{ marginBottom: '10px' }}>
                 <label htmlFor="person1" className="form-label">Family Member 1</label>
                 {selectedFamilyMember ? (
                   <input
@@ -556,7 +541,7 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
                 )}
               </div>
 
-              <div className="mb-3">
+              <div className="mb-3" style={{ marginBottom: '10px' }}>
                 <label htmlFor="person2" className="form-label">Family Member 2</label>
                 <select
                   className="form-select"
@@ -574,7 +559,7 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
                 </select>
               </div>
 
-              <div className="mb-3">
+              <div className="mb-3" style={{ marginBottom: '10px' }}>
                 <label htmlFor="existingRelationshipType" className="form-label">Relationship Type</label>
                 <select
                   className="form-select"
@@ -593,7 +578,7 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
             </>
           )}
 
-          <div className="d-flex justify-content-end">
+          <div className="d-flex justify-content-end" style={{ marginTop: '15px' }}>
             <button type="button" className="btn btn-secondary me-2" onClick={onCancel}>
               Cancel
             </button>

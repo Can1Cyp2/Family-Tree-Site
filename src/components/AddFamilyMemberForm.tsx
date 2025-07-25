@@ -87,18 +87,18 @@ const AddFamilyMemberForm: React.FC<AddFamilyMemberFormProps> = ({
   };
 
   return (
-    <div>
-      <h2 style={{ marginTop: 0 }}>Add Family Member</h2>
+    <div style={{ padding: '10px' }}>
+      <h2 style={{ marginTop: 0, marginBottom: '15px', fontSize: '16px' }}>Add Family Member</h2>
       
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" style={{ marginBottom: '10px' }}>
           {error}
         </div>
       )}
 
       <form onSubmit={handleSubmit}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-          <div className="form-group">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div className="form-group" style={{ marginBottom: '10px' }}>
             <label htmlFor="firstName">First Name *</label>
             <input
               id="firstName"
@@ -111,7 +111,7 @@ const AddFamilyMemberForm: React.FC<AddFamilyMemberFormProps> = ({
             />
           </div>
 
-          <div className="form-group">
+          <div className="form-group" style={{ marginBottom: '10px' }}>
             <label htmlFor="lastName">Last Name *</label>
             <input
               id="lastName"
@@ -125,7 +125,7 @@ const AddFamilyMemberForm: React.FC<AddFamilyMemberFormProps> = ({
           </div>
         </div>
 
-        <div className="form-group">
+        <div className="form-group" style={{ marginBottom: '10px' }}>
           <label htmlFor="gender">Gender</label>
           <select
             id="gender"
@@ -140,8 +140,8 @@ const AddFamilyMemberForm: React.FC<AddFamilyMemberFormProps> = ({
           </select>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-          <div className="form-group">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div className="form-group" style={{ marginBottom: '10px' }}>
             <label htmlFor="birthDate">Birth Date</label>
             <input
               id="birthDate"
@@ -153,7 +153,7 @@ const AddFamilyMemberForm: React.FC<AddFamilyMemberFormProps> = ({
             />
           </div>
 
-          <div className="form-group">
+          <div className="form-group" style={{ marginBottom: '10px' }}>
             <label htmlFor="deathDate">Death Date (if applicable)</label>
             <input
               id="deathDate"
@@ -166,7 +166,7 @@ const AddFamilyMemberForm: React.FC<AddFamilyMemberFormProps> = ({
           </div>
         </div>
 
-        <div className="form-group">
+        <div className="form-group" style={{ marginBottom: '10px' }}>
           <label htmlFor="notes">Notes</label>
           <textarea
             id="notes"
@@ -174,12 +174,12 @@ const AddFamilyMemberForm: React.FC<AddFamilyMemberFormProps> = ({
             className="form-control"
             value={formData.notes}
             onChange={handleInputChange}
-            rows={3}
+            rows={2}
             placeholder="Additional information about this family member..."
           />
         </div>
 
-        <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+        <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
           <button 
             type="submit" 
             className="btn btn-primary"

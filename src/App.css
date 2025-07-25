@@ -89,7 +89,6 @@
   align-items: center;
   z-index: 9999;
   animation: fadeIn 0.3s ease-in-out;
-  pointer-events: none; /* Added to prevent interference */
 }
 
 .hover-gif-container {

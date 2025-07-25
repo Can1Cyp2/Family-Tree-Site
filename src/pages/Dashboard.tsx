@@ -187,6 +187,70 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="container">
+      {/* RED BOX TEST - Moved to top */}
+      {showAddRelationFormMode !== 'none' && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 9999
+          }}
+          onClick={() => setShowAddRelationFormMode('none')}
+        >
+          <div 
+            style={{
+              background: 'white',
+              color: 'black',
+              padding: '20px',
+              border: '2px solid blue',
+              borderRadius: '8px',
+              maxWidth: '500px',
+              width: '90%',
+              maxHeight: '80vh',
+              overflowY: 'auto',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <h3 style={{ color: 'blue', margin: 0, fontSize: '18px' }}>
+                {showAddRelationFormMode === 'add_new_related' ? 'Add New Member' : 'Add Existing Relationship'}
+                {selectedFamilyMember && ` to ${selectedFamilyMember.first_name}`}
+              </h3>
+              <button 
+                onClick={() => setShowAddRelationFormMode('none')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  color: '#666',
+                  padding: '5px'
+                }}
+              >
+                ×
+              </button>
+            </div>
+            
+            <AddRelationForm
+              mode={showAddRelationFormMode}
+              selectedFamilyMember={selectedFamilyMember}
+              familyMembers={familyMembers}
+              existingRelationships={relationships}
+              onRelationAdded={handleRelationAdded}
+              onCancel={() => setShowAddRelationFormMode('none')}
+            />
+          </div>
+        </div>
+      )}
+
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ color: '#1f2937', marginBottom: '1rem' }}>Your Family Tree</h1>
 
@@ -211,14 +275,18 @@ const Dashboard: React.FC = () => {
           {selectedFamilyMember && (
             <>
               <button
-                onClick={() => setShowAddRelationFormMode('add_new_related')}
+                onClick={() => {
+                  setShowAddRelationFormMode('add_new_related');
+                }}
                 className="btn btn-secondary"
                 style={{ marginRight: '10px' }}
               >
                 Add Related Member to {selectedFamilyMember.first_name}
               </button>
               <button
-                onClick={() => setShowAddRelationFormMode('add_existing_relation')}
+                onClick={() => {
+                  setShowAddRelationFormMode('add_existing_relation');
+                }}
                 className="btn btn-secondary"
                 style={{ marginRight: '10px' }}
               >
@@ -246,24 +314,24 @@ const Dashboard: React.FC = () => {
             </button>
           </div>
         ) : (
-          <FamilyTree
-            familyMembers={familyMembers}
-            relationships={relationships}
-            onDeleteMember={handleDeleteMember}
-            onSelectMember={setSelectedFamilyMember}
-            selectedMember={selectedFamilyMember}
-            onDeleteRelationship={handleDeleteRelationship}
-            onAddMember={() => setShowAddMemberForm(true)}
-            onAddRelatedMember={(member) => {
-              setSelectedFamilyMember(member);
-              setShowAddRelationFormMode('add_new_related');
-            }}
-            onAddExistingRelationship={(member) => {
-              setSelectedFamilyMember(member);
-              setShowAddRelationFormMode('add_existing_relation');
-            }}
-            onEditMember={handleEditMember}
-          />
+            <FamilyTree
+              familyMembers={familyMembers}
+              relationships={relationships}
+              onDeleteMember={handleDeleteMember}
+              onSelectMember={setSelectedFamilyMember}
+              selectedMember={selectedFamilyMember}
+              onDeleteRelationship={handleDeleteRelationship}
+              onAddMember={() => setShowAddMemberForm(true)}
+              onAddRelatedMember={(member) => {
+                setSelectedFamilyMember(member);
+                setShowAddRelationFormMode('add_new_related');
+              }}
+              onAddExistingRelationship={(member) => {
+                setSelectedFamilyMember(member);
+                setShowAddRelationFormMode('add_existing_relation');
+              }}
+              onEditMember={handleEditMember}
+            />
         )}
 
         {familyMembers.length > 0 && (
@@ -295,12 +363,12 @@ const Dashboard: React.FC = () => {
                     >
                       Edit
                     </button>
-                    <button
-                      onClick={() => handleDeleteMember(member.id)}
-                      className="btn btn-danger"
-                    >
-                      Delete
-                    </button>
+                  <button
+                    onClick={() => handleDeleteMember(member.id)}
+                    className="btn btn-danger"
+                  >
+                    Delete
+                  </button>
                   </div>
                 </div>
               ))}
@@ -308,36 +376,214 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
+        {/* Simple always-visible test */}
+        <div style={{
+          background: 'orange',
+          color: 'black',
+          padding: '15px',
+          margin: '15px 0',
+          border: '3px solid black',
+          fontSize: '16px',
+          fontWeight: 'bold'
+        }}>
+          🧪 ALWAYS VISIBLE TEST - This should always be visible 🧪
+        </div>
+
         {/* Forms */}
         {showAddMemberForm && (
-          <AddFamilyMemberForm
-            onMemberAdded={handleMemberAdded}
-            onCancel={() => setShowAddMemberForm(false)}
-          />
+          <div 
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 9999
+            }}
+            onClick={() => setShowAddMemberForm(false)}
+          >
+            <div 
+              style={{
+                background: 'white',
+                color: 'black',
+                padding: '20px',
+                border: '2px solid green',
+                borderRadius: '8px',
+                maxWidth: '500px',
+                width: '90%',
+                maxHeight: '80vh',
+                overflowY: 'auto',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                <h3 style={{ color: 'green', margin: 0, fontSize: '18px' }}>Add New Family Member</h3>
+                <button 
+                  onClick={() => setShowAddMemberForm(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    fontSize: '20px',
+                    cursor: 'pointer',
+                    color: '#666',
+                    padding: '5px'
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <AddFamilyMemberForm
+                onMemberAdded={handleMemberAdded}
+                onCancel={() => setShowAddMemberForm(false)}
+              />
+            </div>
+          </div>
         )}
 
-                 {showAddRelationFormMode !== 'none' && (
-           <AddRelationForm
-             mode={showAddRelationFormMode}
-             selectedFamilyMember={selectedFamilyMember}
-             familyMembers={familyMembers}
-             existingRelationships={relationships}
-             onRelationAdded={handleRelationAdded}
-             onCancel={() => setShowAddRelationFormMode('none')}
-           />
-         )}
+        {/* MINIMAL TEST - Replace complex form with simple test */}
+        {/*
+        {showAddRelationFormMode !== 'none' && (
+          <div style={{
+            background: 'red',
+            color: 'white',
+            padding: '50px',
+            margin: '20px 0',
+            border: '10px solid yellow',
+            fontSize: '24px',
+            fontWeight: 'bold',
+            textAlign: 'center'
+          }}>
+            🚨 FORM SHOULD BE VISIBLE - MODE: {showAddRelationFormMode} 🚨
+            <br />
+            <button 
+              style={{
+                background: 'white',
+                color: 'red',
+                padding: '10px 20px',
+                border: 'none',
+                borderRadius: '5px',
+                fontSize: '16px',
+                marginTop: '20px',
+                cursor: 'pointer'
+              }}
+              onClick={() => {
+                console.log('Close button clicked');
+                setShowAddRelationFormMode('none');
+              }}
+            >
+              CLOSE THIS TEST
+            </button>
+          </div>
+        )}
+        */}
+
+        {/* Original complex form - commented out for now */}
+        {/*
+        {showAddRelationFormMode !== 'none' && (
+          <div style={{ 
+            border: '3px solid blue', 
+            padding: '10px', 
+            margin: '10px 0',
+            background: '#d1ecf1'
+          }}>
+            <h3 style={{ color: 'blue' }}>ADD RELATION FORM IS RENDERED - Mode: {showAddRelationFormMode}</h3>
+            <div style={{
+              background: 'lime',
+              color: 'black',
+              padding: '20px',
+              margin: '10px 0',
+              border: '5px solid black',
+              fontSize: '20px',
+              fontWeight: 'bold'
+            }}>
+              🎯 FORM CONTAINER IS VISIBLE - MODE: {showAddRelationFormMode} 🎯
+            </div>
+            
+            <div style={{
+              background: 'white',
+              border: '2px solid purple',
+              padding: '20px',
+              margin: '10px 0',
+              borderRadius: '8px'
+            }}>
+              <h4 style={{ color: 'purple', margin: '0 0 15px 0' }}>SIMPLE TEST FORM</h4>
+              <p style={{ margin: '10px 0' }}>This is a test form to see if forms are visible at all.</p>
+              <input 
+                type="text" 
+                placeholder="Test input field" 
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  margin: '10px 0'
+                }}
+              />
+              <button 
+                style={{
+                  background: 'purple',
+                  color: 'white',
+                  padding: '10px 20px',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  margin: '10px 5px 10px 0'
+                }}
+                onClick={() => console.log('Test button clicked')}
+              >
+                Test Button
+              </button>
+              <button 
+                style={{
+                  background: 'gray',
+                  color: 'white',
+                  padding: '10px 20px',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+                onClick={() => setShowAddRelationFormMode('none')}
+              >
+                Close Test
+              </button>
+            </div>
+            
+            <AddRelationForm
+              mode={showAddRelationFormMode}
+              selectedFamilyMember={selectedFamilyMember}
+              familyMembers={familyMembers}
+              existingRelationships={relationships}
+              onRelationAdded={handleRelationAdded}
+              onCancel={() => setShowAddRelationFormMode('none')}
+            />
+          </div>
+        )}
+        */}
 
         {showEditMemberForm && memberToEdit && (
-          <EditMemberForm
-            member={memberToEdit}
-            onMemberUpdated={handleMemberUpdated}
-            onCancel={() => {
-              setShowEditMemberForm(false);
-              setMemberToEdit(null);
-            }}
-          />
+          <div style={{ 
+            border: '3px solid green', 
+            padding: '10px', 
+            margin: '10px 0',
+            background: '#d4edda'
+          }}>
+            <h3 style={{ color: 'green' }}>EDIT MEMBER FORM IS RENDERED</h3>
+            <EditMemberForm
+              member={memberToEdit}
+              onMemberUpdated={handleMemberUpdated}
+              onCancel={() => {
+                setShowEditMemberForm(false);
+                setMemberToEdit(null);
+              }}
+            />
+          </div>
         )}
-      </div>
+        </div>
     </div>
   );
 };
