@@ -22,6 +22,21 @@
   font-weight: bold;
   color: white;
   text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: opacity 0.3s ease;
+}
+
+.navbar-brand:hover {
+  opacity: 0.8;
+}
+
+.navbar-logo {
+  width: 48px;
+  height: 48px;
+  filter: brightness(0) invert(1); /* Makes the logo white */
+  cursor: pointer;
 }
 
 .navbar-nav {
@@ -48,6 +63,69 @@
   margin-right: 1rem;
 }
 
+/* Hover Logo Overlay Styles */
+.hover-gif-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.hover-gif-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  animation: growIn 0.5s ease-out;
+}
+
+.hover-gif-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.hover-logo {
+  width: 300px;
+  height: 300px;
+  object-fit: contain;
+  animation: pulse 2s infinite;
+  filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.5));
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes growIn {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
 @media (max-width: 768px) {
   .navbar-content {
     flex-direction: column;
@@ -57,5 +135,19 @@
   .navbar-nav {
     flex-wrap: wrap;
     justify-content: center;
+  }
+  
+  .navbar-logo {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .navbar-brand {
+    font-size: 1.3rem;
+  }
+  
+  .hover-logo {
+    width: 200px;
+    height: 200px;
   }
 }

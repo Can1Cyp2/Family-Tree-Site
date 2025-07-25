@@ -20,7 +20,6 @@ const Dashboard: React.FC = () => {
   const [showEditMemberForm, setShowEditMemberForm] = useState(false);
   const [memberToEdit, setMemberToEdit] = useState<FamilyMember | null>(null);
   const [selectedFamilyMember, setSelectedFamilyMember] = useState<FamilyMember | null>(null);
-  const [showTree, setShowTree] = useState(true); // Add this line
 
   useEffect(() => {
     if (!user) {
@@ -102,22 +101,19 @@ const Dashboard: React.FC = () => {
     }
 
     try {
-      console.log(`Attempting to delete member ${memberId} and associated relationships for user ${user.id}`);
-
-      // 1. Delete associated relationships
+      // First, delete all relationships involving this member
       const { error: relationshipsError } = await supabase
         .from('relationships')
         .delete()
-        .or(`person1_id.eq.${memberId},person2_id.eq.${memberId}`)
-        .eq('user_id', user.id);
+        .or(`person1_id.eq.${memberId},person2_id.eq.${memberId}`);
 
       if (relationshipsError) {
         console.error('Error deleting relationships:', relationshipsError);
-        throw relationshipsError;
+        setError('Failed to delete relationships');
+        return;
       }
-      console.log('Relationships deleted successfully.');
 
-      // 2. Delete the family member
+      // Then delete the family member
       const { error: memberError } = await supabase
         .from('family_members')
         .delete()
@@ -125,17 +121,26 @@ const Dashboard: React.FC = () => {
         .eq('user_id', user.id);
 
       if (memberError) {
-        console.error('Error deleting member:', memberError);
-        throw memberError;
+        console.error('Error deleting family member:', memberError);
+        setError('Failed to delete family member');
+        return;
       }
-      console.log('Family member deleted successfully.');
 
-      // Re-fetch all data to ensure state is synchronized with the database
-      fetchData();
-      console.log('Data re-fetched after deletion.');
+      // Update local state
+      setFamilyMembers(prev => prev.filter(member => member.id !== memberId));
+      setRelationships(prev => prev.filter(rel => 
+        rel.person1_id !== memberId && rel.person2_id !== memberId
+      ));
+
+      // Clear selection if the deleted member was selected
+      if (selectedFamilyMember?.id === memberId) {
+        setSelectedFamilyMember(null);
+      }
+
+      console.log('Family member and relationships deleted successfully');
     } catch (error: any) {
-      console.error('Caught error during deletion process:', error);
-      setError(error.message || 'Failed to delete family member and relationships');
+      console.error('Error deleting family member:', error);
+      setError(error.message || 'Failed to delete family member');
     }
   };
 
@@ -151,28 +156,26 @@ const Dashboard: React.FC = () => {
     }
 
     try {
-      console.log(`Attempting to delete relationship ${relationshipId} for user ${user.id}`);
-      const { error: deleteError } = await supabase
+      const { error } = await supabase
         .from('relationships')
         .delete()
         .eq('id', relationshipId)
         .eq('user_id', user.id);
 
-      if (deleteError) {
-        console.error('Error deleting relationship:', deleteError);
-        throw deleteError;
+      if (error) {
+        console.error('Error deleting relationship:', error);
+        setError('Failed to delete relationship');
+        return;
       }
-      console.log('Relationship deleted successfully.');
-      fetchData(); // Re-fetch all data to update the tree
+
+      // Update local state
+      setRelationships(prev => prev.filter(rel => rel.id !== relationshipId));
+      console.log('Relationship deleted successfully');
     } catch (error: any) {
-      console.error('Caught error during relationship deletion process:', error);
-      setError(error.message || 'Failed to delete relationship.');
+      console.error('Error deleting relationship:', error);
+      setError(error.message || 'Failed to delete relationship');
     }
   };
-
-  if (!user) {
-    return null;
-  }
 
   if (loading) {
     return (
@@ -203,13 +206,6 @@ const Dashboard: React.FC = () => {
             style={{ marginRight: '10px' }}
           >
             Add New Family Member
-          </button>
-          <button
-            onClick={() => setShowTree(true)}
-            className="btn btn-secondary"
-            style={{ marginRight: '10px' }}
-          >
-            Show Family Tree
           </button>
 
           {selectedFamilyMember && (
@@ -250,174 +246,98 @@ const Dashboard: React.FC = () => {
             </button>
           </div>
         ) : (
-          showTree && (
-            <FamilyTree
-              familyMembers={familyMembers}
-              relationships={relationships}
-              onDeleteMember={handleDeleteMember}
-              onSelectMember={setSelectedFamilyMember}
-              selectedMember={selectedFamilyMember}
-              onDeleteRelationship={handleDeleteRelationship}
-              onAddMember={() => setShowAddMemberForm(true)}
-              onAddRelatedMember={(member) => {
-                setSelectedFamilyMember(member);
-                setShowAddRelationFormMode('add_new_related');
-              }}
-              onAddExistingRelationship={(member) => {
-                setSelectedFamilyMember(member);
-                setShowAddRelationFormMode('add_existing_relation');
-              }}
-              onEditMember={handleEditMember}
-              onCloseTreeView={() => setShowTree(false)}
-            />
-          )
+          <FamilyTree
+            familyMembers={familyMembers}
+            relationships={relationships}
+            onDeleteMember={handleDeleteMember}
+            onSelectMember={setSelectedFamilyMember}
+            selectedMember={selectedFamilyMember}
+            onDeleteRelationship={handleDeleteRelationship}
+            onAddMember={() => setShowAddMemberForm(true)}
+            onAddRelatedMember={(member) => {
+              setSelectedFamilyMember(member);
+              setShowAddRelationFormMode('add_new_related');
+            }}
+            onAddExistingRelationship={(member) => {
+              setSelectedFamilyMember(member);
+              setShowAddRelationFormMode('add_existing_relation');
+            }}
+            onEditMember={handleEditMember}
+          />
         )}
 
         {familyMembers.length > 0 && (
           <div className="card">
             <h3>Family Members ({familyMembers.length})</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1rem' }}>
-              {familyMembers.map(member => (
-                <div key={member.id} style={{
-                  padding: '1rem',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '8px',
-                  background: '#f9fafb'
-                }}>
-                  <h4 style={{ margin: '0 0 0.5rem 0', color: '#1f2937' }}>
-                    {member.first_name} {member.last_name}
-                  </h4>
-                  <p style={{ margin: '0', color: '#6b7280', fontSize: '0.9rem' }}>
-                    Gender: {member.gender}
-                  </p>
+              {familyMembers.map((member) => (
+                <div key={member.id} className="member-card">
+                  <h4>{member.first_name} {member.last_name}</h4>
+                  <p><strong>Gender:</strong> {member.gender}</p>
                   {member.birth_date && (
-                    <p style={{ margin: '0', color: '#6b7280', fontSize: '0.9rem' }}>
-                      Born: {new Date(member.birth_date).toLocaleDateString()}
-                    </p>
+                    <p><strong>Birth Date:</strong> {new Date(member.birth_date).toLocaleDateString()}</p>
                   )}
-                  <button
-                    onClick={() => handleDeleteMember(member.id)}
-                    className="btn btn-danger"
-                    style={{ marginTop: '0.5rem', padding: '5px 10px', fontSize: '0.8rem' }}
-                  >
-                    Delete
-                  </button>
+                  {member.death_date && (
+                    <p><strong>Death Date:</strong> {new Date(member.death_date).toLocaleDateString()}</p>
+                  )}
+                  <div style={{ marginTop: '1rem' }}>
+                    <button
+                      onClick={() => setSelectedFamilyMember(member)}
+                      className="btn btn-secondary"
+                      style={{ marginRight: '0.5rem' }}
+                    >
+                      Select
+                    </button>
+                    <button
+                      onClick={() => handleEditMember(member)}
+                      className="btn btn-info"
+                      style={{ marginRight: '0.5rem' }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteMember(member.id)}
+                      className="btn btn-danger"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         )}
+
+        {/* Forms */}
+        {showAddMemberForm && (
+          <AddFamilyMemberForm
+            onMemberAdded={handleMemberAdded}
+            onCancel={() => setShowAddMemberForm(false)}
+          />
+        )}
+
+                 {showAddRelationFormMode !== 'none' && (
+           <AddRelationForm
+             mode={showAddRelationFormMode}
+             selectedFamilyMember={selectedFamilyMember}
+             familyMembers={familyMembers}
+             existingRelationships={relationships}
+             onRelationAdded={handleRelationAdded}
+             onCancel={() => setShowAddRelationFormMode('none')}
+           />
+         )}
+
+        {showEditMemberForm && memberToEdit && (
+          <EditMemberForm
+            member={memberToEdit}
+            onMemberUpdated={handleMemberUpdated}
+            onCancel={() => {
+              setShowEditMemberForm(false);
+              setMemberToEdit(null);
+            }}
+          />
+        )}
       </div>
-
-      {showAddMemberForm && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '2rem',
-            borderRadius: '10px',
-            maxWidth: '500px',
-            width: '90%',
-            maxHeight: '90vh',
-            overflow: 'auto'
-          }}>
-            <AddFamilyMemberForm
-              onMemberAdded={handleMemberAdded}
-              onCancel={() => setShowAddMemberForm(false)}
-            />
-          </div>
-        </div>
-      )}
-
-      {showAddRelationFormMode !== 'none' && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '2rem',
-            borderRadius: '10px',
-            maxWidth: '500px',
-            width: '90%',
-            maxHeight: '90vh',
-            overflow: 'auto'
-          }}>
-            {showAddRelationFormMode === 'add_new_related' && selectedFamilyMember && (
-              <AddRelationForm
-                mode="add_new_related"
-                selectedFamilyMember={selectedFamilyMember}
-                familyMembers={familyMembers}
-                existingRelationships={relationships}
-                onRelationAdded={handleRelationAdded}
-                onCancel={() => setShowAddRelationFormMode('none')}
-              />
-            )}
-            {showAddRelationFormMode === 'add_existing_relation' && selectedFamilyMember && (
-              <AddRelationForm
-                mode="add_existing_relation"
-                familyMembers={familyMembers}
-                existingRelationships={relationships}
-                selectedFamilyMember={selectedFamilyMember}
-                onRelationAdded={handleRelationAdded}
-                onCancel={() => setShowAddRelationFormMode('none')}
-              />
-            )}
-          </div>
-        </div>
-      )}
-
-      {showEditMemberForm && memberToEdit && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '2rem',
-            borderRadius: '10px',
-            maxWidth: '500px',
-            width: '90%',
-            maxHeight: '90vh',
-            overflow: 'auto'
-          }}>
-            <EditMemberForm
-              member={memberToEdit}
-              onMemberUpdated={handleMemberUpdated}
-              onCancel={() => {
-                setShowEditMemberForm(false);
-                setMemberToEdit(null);
-              }}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 };
