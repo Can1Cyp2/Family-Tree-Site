@@ -4,7 +4,7 @@
   margin: 0 auto;
   position: relative;
   background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-  overflow: hidden; /* Hide scrollbars and prevent scrolling */
+  overflow: hidden; /* Hide scrollbars and prevent scrolling on desktop */
   /* Hide scrollbars for all browsers */
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none;  /* IE 10+ */
@@ -410,26 +410,217 @@
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .family-tree-controls {
-    flex-direction: column;
-    gap: 8px;
+  body.tree-view-active {
+    overflow: hidden !important;
+    height: 100vh;
+    width: 100vw;
   }
-  
+  body.tree-view-active #root {
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+  .family-tree-container {
+    width: 100vw;
+    height: 100vh;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #f9fafb;
+    z-index: 1;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  .family-tree-container ~ * {
+    overflow: hidden;
+  }
+  .family-tree-svg {
+    width: 100vw !important;
+    height: 100vh !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    display: block;
+    overflow: hidden;
+    touch-action: none;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
   .legend {
-    bottom: 10px;
-    right: 10px;
-    padding: 10px;
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255,255,255,0.95);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    padding: 6px 12px;
+    font-size: 13px;
+    z-index: 10;
+  }
+  .member-popup {
+    position: fixed !important;
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: 95vw !important;
+    max-width: 420px !important;
+    max-height: 90vh !important;
+    overflow-y: auto;
+    z-index: 1001;
   }
   
+
+  
+  .popup-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #e5e7eb;
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 10;
+  }
+  
+  .relationships-section {
+    padding: 16px 20px;
+  }
+  
+  .popup-actions {
+    padding: 16px 20px;
+    border-top: 1px solid #e5e7eb;
+    position: sticky;
+    bottom: 0;
+    background: white;
+    z-index: 10;
+  }
+  
+  /* Mobile-specific popup content adjustments */
+  .member-info-section {
+    padding: 16px 20px;
+  }
+  
+  .member-info-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .member-info-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .member-info-label {
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 500;
+  }
+  
+  .member-info-value {
+    font-size: 14px;
+  }
+  
+  .relationship-group {
+    margin-bottom: 16px;
+  }
+  
+  .relationship-label {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  
+  .relationship-item {
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    border-radius: 6px;
+    background: #f9fafb;
+  }
+  
+  .relationship-name {
+    font-size: 14px;
+  }
+  
+  .delete-relationship-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+  
+  .popup-action-btn {
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 12px 16px;
+    font-size: 14px;
+    border-radius: 8px;
+  }
+  
+  .popup-action-btn:last-child {
+    margin-bottom: 0;
+  }
+  
+  /* Ensure SVG can be scrolled on mobile */
+  .family-tree-svg {
+    min-width: 100%;
+    min-height: 100%;
+    touch-action: pan-x pan-y; /* Enable touch scrolling */
+  }
+}
+
+/* Extra small mobile devices */
+@media (max-width: 480px) {
   .member-popup {
-    width: 320px;
-    max-height: 80vh;
+    width: 98vw;
+    max-width: none;
+    max-height: 95vh;
+    margin: 10px;
   }
   
   .popup-header,
   .relationships-section,
-  .popup-actions {
-    padding: 16px 20px;
+  .popup-actions,
+  .member-info-section {
+    padding: 12px 16px;
+  }
+  
+  .popup-title {
+    font-size: 18px;
+  }
+  
+  .member-info-grid {
+    gap: 8px;
+  }
+  
+  .relationship-item {
+    padding: 6px 10px;
+  }
+  
+  .popup-action-btn {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+  
+  .family-tree-controls {
+    top: 5px;
+    left: 5px;
+    padding: 8px;
+  }
+  
+  .control-button {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  
+  .legend {
+    bottom: 5px;
+    right: 5px;
+    padding: 8px;
+    font-size: 12px;
   }
 }
 
@@ -551,4 +742,31 @@
   font-size: 18px;
   font-weight: 600;
   color: #1f2937;
+}
+
+.treeview-close-btn {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 2000;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.treeview-close-btn:active {
+  background: #f3f4f6;
+}
+@media (min-width: 769px) {
+  .treeview-close-btn {
+    display: none !important;
+  }
 }

@@ -13,6 +13,7 @@ interface FamilyTreeProps {
   onAddRelatedMember: (member: FamilyMember) => void;
   onAddExistingRelationship: (member: FamilyMember) => void;
   onEditMember: (member: FamilyMember) => void;
+  onCloseTreeView?: () => void; // Optional close handler
 }
 
 interface TreeNode {
@@ -39,7 +40,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   onAddMember,
   onAddRelatedMember,
   onAddExistingRelationship,
-  onEditMember
+  onEditMember,
+  onCloseTreeView
 }) => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -48,6 +50,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   const [showMemberPopup, setShowMemberPopup] = useState<FamilyMember | null>(null);
   const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const svgRef = useRef<SVGSVGElement>(null);
 
   // Layout constants
@@ -64,6 +67,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   useEffect(() => {
     const handleResize = () => {
       setDimensions({ width: window.innerWidth, height: window.innerHeight });
+      setIsMobile(window.innerWidth <= 768);
     };
 
     window.addEventListener('resize', handleResize);
@@ -466,10 +470,39 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         bloodRelativeWidths.push(sibSubtreeWidth);
       });
       
-      // Calculate total width needed
-      const totalBloodRelativeWidth = bloodRelativeWidths.reduce((sum, width, idx) => {
-        return sum + width + (idx < bloodRelativeWidths.length - 1 ? CHILD_GAP : 0);
-      }, 0);
+      // Calculate total spacing needed between siblings based on their children
+      let totalSpacingNeeded = 0;
+      for (let i = 0; i < bloodRelatives.length - 1; i++) {
+        const thisSib = bloodRelatives[i];
+        const nextSib = bloodRelatives[i + 1];
+        
+        const thisChildCount = thisSib.children.length;
+        const nextChildCount = nextSib.children.length;
+        const totalChildCount = thisChildCount + nextChildCount;
+        
+        // Base gap increases with more children to prevent line crossings
+        let spacingGap = CHILD_GAP;
+        
+        if (totalChildCount > 0) {
+          // Increase spacing based on total number of children between siblings
+          spacingGap = CHILD_GAP + (totalChildCount * 20); // 20px extra per child
+          
+          // Additional spacing if both siblings have children
+          if (thisChildCount > 0 && nextChildCount > 0) {
+            spacingGap += CHILD_GAP * 1.5; // Extra 50% gap when both have children
+          }
+          
+          // Even more spacing if either sibling has many children
+          if (thisChildCount >= 3 || nextChildCount >= 3) {
+            spacingGap += CHILD_GAP * 2; // Extra spacing for families with 3+ children
+          }
+        }
+        
+        totalSpacingNeeded += spacingGap;
+      }
+      
+      // Calculate total width needed including extra spacing
+      const totalBloodRelativeWidth = bloodRelativeWidths.reduce((sum, width) => sum + width, 0) + totalSpacingNeeded;
       
       // Add space for spouses on the left
       const spouseSpace = spouses.length * 100; // Space for spouses
@@ -496,21 +529,34 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           sibCenter = currentX + sibSubtreeWidth / 2;
         }
         
-        // Position siblings to avoid line crossings based on their children's positions
+        // Position siblings with calculated spacing
         if (idx < bloodRelatives.length - 1) {
           const nextSib = bloodRelatives[idx + 1];
           
-          // Check if either sibling has children that would cause line crossings
-          const thisHasChildren = sib.children.length > 0;
-          const nextHasChildren = nextSib.children.length > 0;
+          // Calculate spacing based on number of children each sibling has
+          const thisChildCount = sib.children.length;
+          const nextChildCount = nextSib.children.length;
+          const totalChildCount = thisChildCount + nextChildCount;
           
-          if (thisHasChildren && nextHasChildren) {
-            // Both have children, so give them more space to avoid line crossings
-            const extraGap = CHILD_GAP * 2; // Double the gap to prevent crossings
-            currentX += sibSubtreeWidth + extraGap;
-          } else {
-            currentX += sibSubtreeWidth + CHILD_GAP;
+          // Base gap increases with more children to prevent line crossings
+          let spacingGap = CHILD_GAP;
+          
+          if (totalChildCount > 0) {
+            // Increase spacing based on total number of children between siblings
+            spacingGap = CHILD_GAP + (totalChildCount * 20); // 20px extra per child
+            
+            // Additional spacing if both siblings have children
+            if (thisChildCount > 0 && nextChildCount > 0) {
+              spacingGap += CHILD_GAP * 1.5; // Extra 50% gap when both have children
+            }
+            
+            // Even more spacing if either sibling has many children
+            if (thisChildCount >= 3 || nextChildCount >= 3) {
+              spacingGap += CHILD_GAP * 2; // Extra spacing for families with 3+ children
+            }
           }
+          
+          currentX += sibSubtreeWidth + spacingGap;
         } else {
           currentX += sibSubtreeWidth;
         }
@@ -571,6 +617,46 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     return Array.from(nodeMap.values());
   }, [familyMembers, relationships, relationshipMap]);
 
+  // Auto-fit tree to mobile screen on initial load
+  useEffect(() => {
+    if (window.innerWidth > 768) return; // Only run on mobile
+    if (!svgRef.current || treeNodes.length === 0) return;
+
+    // Find bounds of all nodes
+    const minX = Math.min(...treeNodes.map(n => n.x));
+    const maxX = Math.max(...treeNodes.map(n => n.x));
+    const minY = Math.min(...treeNodes.map(n => n.y));
+    const maxY = Math.max(...treeNodes.map(n => n.y));
+
+    const treeWidth = maxX - minX + 180; // CARD_WIDTH
+    const treeHeight = maxY - minY + 120; // CARD_HEIGHT
+
+    const screenW = window.innerWidth;
+    const screenH = window.innerHeight;
+
+    // Calculate best zoom to fit with minimal padding
+    const zoomX = (screenW * 0.95) / treeWidth;
+    const zoomY = (screenH * 0.95) / treeHeight;
+    const fitZoom = Math.max(0.8, Math.min(zoomX, zoomY, 1.0)); // Min zoom 0.8, max 1.0
+
+    setZoom(fitZoom);
+    // Center the tree
+    setPan({
+      x: (screenW / 2) - ((minX + maxX) / 2) * fitZoom,
+      y: (screenH / 2) - ((minY + maxY) / 2) * fitZoom
+    });
+  }, [treeNodes]);
+
+  // Add/remove body class for mobile tree view
+  useEffect(() => {
+    if (isMobile) {
+      document.body.classList.add('tree-view-active');
+      return () => {
+        document.body.classList.remove('tree-view-active');
+      };
+    }
+  }, [isMobile]);
+
   // Handle mouse events for pan and zoom
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const target = e.target as Element;
@@ -601,18 +687,80 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     setZoom(prev => Math.max(0.1, Math.min(3, prev * delta)));
   }, []);
 
-  const handleMemberClick = (member: FamilyMember, event: React.MouseEvent) => {
+  // Handle touch events for mobile
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const target = e.target as Element;
+    // Only handle touch events on the SVG background, not on member cards
+    if (target === svgRef.current || target.tagName === 'svg') {
+      if (e.touches.length === 1) {
+        // Single touch - start panning
+        setIsDragging(true);
+        setDragStart({ 
+          x: e.touches[0].clientX - pan.x, 
+          y: e.touches[0].clientY - pan.y 
+        });
+      }
+    }
+  }, [pan]);
+
+  const handleTouchEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const handler = (e: TouchEvent) => {
+      if (isDragging && e.touches.length === 1) {
+        e.preventDefault();
+        setPan({
+          x: e.touches[0].clientX - dragStart.x,
+          y: e.touches[0].clientY - dragStart.y
+        });
+      }
+    };
+    svg.addEventListener('touchmove', handler, { passive: false });
+    return () => svg.removeEventListener('touchmove', handler);
+  }, [isDragging, dragStart]);
+
+  const handleMemberClick = (member: FamilyMember, event: React.MouseEvent | React.TouchEvent) => {
+    // Stop propagation to prevent SVG touch events from interfering
     event.stopPropagation();
     event.preventDefault();
     
-    // Get the bounding rect of the container
+    // Prevent the touch from triggering panning
+    if ('touches' in event) {
+      setIsDragging(false);
+    }
+    
+    // Check if we're on a mobile device
+    const isMobile = window.innerWidth <= 768;
+    
+    if (isMobile) {
+      // On mobile, always center the popup - don't set position, let CSS handle it
+      setShowMemberPopup(member);
+      onSelectMember(member);
+      return;
+    }
+    
+    // Desktop positioning logic
     const container = document.querySelector('.family-tree-container') as HTMLElement;
     const svgRect = svgRef.current?.getBoundingClientRect();
     const containerRect = container?.getBoundingClientRect();
     if (!svgRect || !containerRect) return;
 
-    const clientX = event.clientX;
-    const clientY = event.clientY;
+    // Handle both mouse and touch events
+    let clientX: number, clientY: number;
+    if ('touches' in event) {
+      // Touch event
+      clientX = event.touches[0].clientX;
+      clientY = event.touches[0].clientY;
+    } else {
+      // Mouse event
+      clientX = event.clientX;
+      clientY = event.clientY;
+    }
+
     const popupWidth = 380;
     const popupHeight = 600;
     const margin = 16;
@@ -747,6 +895,25 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
   return (
     <div className="family-tree-container">
+      {/* Mobile close button */}
+      {isMobile && (
+        <button
+          className="treeview-close-btn"
+          onClick={() => {
+            if (onCloseTreeView) {
+              onCloseTreeView();
+            } else {
+              // Fallback: reset view if no close handler provided
+              setZoom(1);
+              setPan({ x: 0, y: 0 });
+              console.log('Close button clicked - no handler provided');
+            }
+          }}
+          aria-label="Close family tree"
+        >
+          ×
+        </button>
+      )}
       <div className="family-tree-controls">
         <button
           onClick={() => setZoom(prev => Math.min(3, prev * 1.2))}
@@ -777,6 +944,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
         style={{ userSelect: 'none' }}
       >
         <defs>
@@ -1144,13 +1313,27 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
       {/* Member popup */}
       {showMemberPopup && (
-        <div
-          className="member-popup"
-          style={{
-            left: popupPosition.x,
-            top: popupPosition.y,
-          }}
-        >
+        <>
+          {/* Backdrop overlay */}
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.5)',
+              zIndex: 1000,
+            }}
+            onClick={closePopup}
+          />
+          <div
+            className="member-popup"
+            style={{
+              left: window.innerWidth <= 768 ? undefined : popupPosition.x,
+              top: window.innerWidth <= 768 ? undefined : popupPosition.y,
+            }}
+          >
           <div className="popup-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <h3 className="popup-title">
@@ -1354,6 +1537,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             </button>
           </div>
         </div>
+        </>
       )}
     </div>
   );
