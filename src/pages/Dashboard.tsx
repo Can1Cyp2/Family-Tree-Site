@@ -137,6 +137,12 @@ const Dashboard: React.FC = () => {
         setSelectedFamilyMember(null);
       }
 
+      // Close all modals when a member is deleted
+      setShowAddMemberForm(false);
+      setShowAddRelationFormMode('none');
+      setShowEditMemberForm(false);
+      setMemberToEdit(null);
+
       console.log('Family member and relationships deleted successfully');
     } catch (error: any) {
       console.error('Error deleting family member:', error);
@@ -192,15 +198,16 @@ const Dashboard: React.FC = () => {
         <div 
           style={{
             position: 'fixed',
-            top: 0,
+            top: '80px', // Start below the navbar
             left: 0,
             right: 0,
             bottom: 0,
             background: 'rgba(0, 0, 0, 0.5)',
             display: 'flex',
             justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 9999
+            alignItems: 'flex-start',
+            paddingTop: '20px',
+            zIndex: 1000
           }}
           onClick={() => setShowAddRelationFormMode('none')}
         >
@@ -213,7 +220,7 @@ const Dashboard: React.FC = () => {
               borderRadius: '8px',
               maxWidth: '500px',
               width: '90%',
-              maxHeight: '80vh',
+              maxHeight: 'calc(80vh - 100px)',
               overflowY: 'auto',
               boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
             }}
@@ -394,15 +401,16 @@ const Dashboard: React.FC = () => {
           <div 
             style={{
               position: 'fixed',
-              top: 0,
+              top: '80px', // Start below the navbar
               left: 0,
               right: 0,
               bottom: 0,
               background: 'rgba(0, 0, 0, 0.5)',
               display: 'flex',
               justifyContent: 'center',
-              alignItems: 'center',
-              zIndex: 9999
+              alignItems: 'flex-start',
+              paddingTop: '20px',
+              zIndex: 1000
             }}
             onClick={() => setShowAddMemberForm(false)}
           >
@@ -415,7 +423,7 @@ const Dashboard: React.FC = () => {
                 borderRadius: '8px',
                 maxWidth: '500px',
                 width: '90%',
-                maxHeight: '80vh',
+                maxHeight: 'calc(80vh - 100px)',
                 overflowY: 'auto',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
               }}

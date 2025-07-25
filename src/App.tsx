@@ -17,10 +17,8 @@ function App() {
   const isHoveringRef = useRef(false);
 
   const handleMouseEnter = () => {
-    console.log('=== MOUSE ENTER EVENT TRIGGERED ===');
     console.log('Mouse entered logo area, isHovering:', isHoveringRef.current);
     
-    // If already hovering, ignore
     if (isHoveringRef.current) {
       console.log('Already hovering, ignoring');
       return;
@@ -29,28 +27,23 @@ function App() {
     isHoveringRef.current = true;
     console.log('Set isHovering to true');
     
-    // Clear any existing timeout
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
       console.log('Cleared existing timeout');
     }
     
-    // Set a new timeout to show the overlay after 300ms
     hoverTimeoutRef.current = setTimeout(() => {
       console.log('Timeout fired, isHovering:', isHoveringRef.current);
       if (isHoveringRef.current) {
         console.log('Showing overlay after delay');
         setShowHoverGif(true);
       }
-    }, 300);
-    console.log('Set new timeout for 300ms');
+    }, 3000); // 3 seconds
   };
 
   const handleMouseLeave = () => {
-    console.log('=== MOUSE LEAVE EVENT TRIGGERED ===');
     console.log('Mouse left logo area, isHovering:', isHoveringRef.current);
     
-    // Only process if we were actually hovering
     if (!isHoveringRef.current) {
       console.log('Was not hovering, ignoring');
       return;
@@ -59,14 +52,12 @@ function App() {
     isHoveringRef.current = false;
     console.log('Set isHovering to false');
     
-    // Clear the show timeout
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
       hoverTimeoutRef.current = null;
       console.log('Cleared timeout');
     }
     
-    // Hide the overlay
     console.log('Hiding overlay');
     setShowHoverGif(false);
   };
@@ -121,12 +112,47 @@ function App() {
         </div>
       </nav>
 
-      {/* Hover GIF Overlay */}
+      {/* Hover GIF Overlay - Using a different approach */}
       {showHoverGif && (
-        <div className="hover-gif-overlay">
-          <div className="hover-gif-container">
+        <div 
+          className="hover-gif-overlay"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            background: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10000, // Higher than modals
+            animation: 'fadeIn 0.3s ease-in-out',
+            pointerEvents: 'none' // Allow clicks to pass through
+          }}
+        >
+          <div 
+            className="hover-gif-container"
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              animation: 'growIn 0.5s ease-out'
+            }}
+          >
             <div className="hover-gif-content">
-              <img src={binoopetGif} alt="Binoopet Animation" className="hover-logo" />
+              <img 
+                src={binoopetGif} 
+                alt="Binoopet Animation" 
+                className="hover-logo"
+                style={{
+                  width: '300px',
+                  height: '300px',
+                  objectFit: 'contain',
+                  animation: 'pulse 2s infinite',
+                  filter: 'drop-shadow(0 0 20px rgba(255, 255, 255, 0.5))'
+                }}
+              />
             </div>
           </div>
         </div>
