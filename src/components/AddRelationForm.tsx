@@ -29,6 +29,7 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
   const [newMemberFirstName, setNewMemberFirstName] = useState('');
   const [newMemberLastName, setNewMemberLastName] = useState('');
   const [birthDate, setBirthDate] = useState('');
+  const [deathDate, setDeathDate] = useState('');
   const [gender, setGender] = useState<'male' | 'female' | 'other' | ''>('');
   const [newRelatedRelationshipType, setNewRelatedRelationshipType] = useState<'' | 'parent' | 'child' | 'spouse' | 'sibling'>('');
 
@@ -36,6 +37,207 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
   const [person1Id, setPerson1Id] = useState<string>(selectedFamilyMember?.id || '');
   const [person2Id, setPerson2Id] = useState<string>('');
   const [existingRelationshipType, setExistingRelationshipType] = useState<'' | 'parent' | 'child' | 'spouse' | 'sibling'>('');
+
+  // Auto-relationship detection and creation function
+  const createAutoRelationships = async (
+    newMember: FamilyMember, 
+    selectedFamilyMember: FamilyMember, 
+    relationshipType: string
+  ) => {
+    console.log('Auto-relationships: Processing for', selectedFamilyMember.first_name, 'with new member', newMember.first_name);
+    
+    // 1. SIBLING RELATIONSHIPS
+    if (relationshipType === 'sibling') {
+      console.log('Auto-sibling: Processing sibling relationship for', selectedFamilyMember.first_name);
+      
+      // Find all existing siblings of the selected family member
+      const existingSiblingRelationships = existingRelationships.filter(rel =>
+        (rel.person1_id === selectedFamilyMember.id || rel.person2_id === selectedFamilyMember.id) &&
+        rel.relationship_type === 'sibling'
+      );
+
+      console.log('Auto-sibling: Found existing sibling relationships:', existingSiblingRelationships.length);
+
+      // Get the IDs of all existing siblings
+      const existingSiblingIds = existingSiblingRelationships.map(rel => {
+        if (rel.person1_id === selectedFamilyMember.id) {
+          return rel.person2_id;
+        } else {
+          return rel.person1_id;
+        }
+      });
+
+      console.log('Auto-sibling: Existing sibling IDs:', existingSiblingIds);
+
+      // Create sibling relationships between the new member and all existing siblings
+      for (const siblingId of existingSiblingIds) {
+        // Add relationship from new member to existing sibling
+        const { error: siblingError1 } = await supabase
+          .from('relationships')
+          .insert({
+            user_id: user!.id,
+            person1_id: newMember.id,
+            person2_id: siblingId,
+            relationship_type: 'sibling',
+          });
+        if (siblingError1) {
+          console.warn('Failed to add sibling relationship:', siblingError1);
+        }
+
+        // Add reciprocal relationship from existing sibling to new member
+        const { error: siblingError2 } = await supabase
+          .from('relationships')
+          .insert({
+            user_id: user!.id,
+            person1_id: siblingId,
+            person2_id: newMember.id,
+            relationship_type: 'sibling',
+          });
+        if (siblingError2) {
+          console.warn('Failed to add reciprocal sibling relationship:', siblingError2);
+        }
+      }
+    }
+
+    // 2. SPOUSE RELATIONSHIPS - Auto-create parent relationships for existing children
+    if (relationshipType === 'spouse') {
+      console.log('Auto-spouse: Processing spouse relationship');
+      
+      // Find all children of the selected family member
+      const childrenOfSelected = existingRelationships.filter(rel =>
+        (rel.person1_id === selectedFamilyMember.id || rel.person2_id === selectedFamilyMember.id) &&
+        rel.relationship_type === 'parent'
+      );
+
+      console.log('Auto-spouse: Found children of selected member:', childrenOfSelected.length);
+
+      // For each child, create a parent relationship with the new spouse
+      for (const childRel of childrenOfSelected) {
+        const childId = childRel.person1_id === selectedFamilyMember.id ? childRel.person2_id : childRel.person1_id;
+        
+        // Add parent relationship from new spouse to child
+        const { error: parentError1 } = await supabase
+          .from('relationships')
+          .insert({
+            user_id: user!.id,
+            person1_id: newMember.id,
+            person2_id: childId,
+            relationship_type: 'parent',
+          });
+        if (parentError1) {
+          console.warn('Failed to add parent relationship from spouse to child:', parentError1);
+        }
+
+        // Add child relationship from child to new spouse
+        const { error: childError1 } = await supabase
+          .from('relationships')
+          .insert({
+            user_id: user!.id,
+            person1_id: childId,
+            person2_id: newMember.id,
+            relationship_type: 'child',
+          });
+        if (childError1) {
+          console.warn('Failed to add child relationship from child to spouse:', childError1);
+        }
+      }
+
+      // Also check if the new member has existing children and create parent relationships with the selected member
+      const childrenOfNewMember = existingRelationships.filter(rel =>
+        (rel.person1_id === newMember.id || rel.person2_id === newMember.id) &&
+        rel.relationship_type === 'parent'
+      );
+
+      console.log('Auto-spouse: Found children of new member:', childrenOfNewMember.length);
+
+      for (const childRel of childrenOfNewMember) {
+        const childId = childRel.person1_id === newMember.id ? childRel.person2_id : childRel.person1_id;
+        
+        // Add parent relationship from selected member to child
+        const { error: parentError2 } = await supabase
+          .from('relationships')
+          .insert({
+            user_id: user!.id,
+            person1_id: selectedFamilyMember.id,
+            person2_id: childId,
+            relationship_type: 'parent',
+          });
+        if (parentError2) {
+          console.warn('Failed to add parent relationship from selected to child:', parentError2);
+        }
+
+        // Add child relationship from child to selected member
+        const { error: childError2 } = await supabase
+          .from('relationships')
+          .insert({
+            user_id: user!.id,
+            person1_id: childId,
+            person2_id: selectedFamilyMember.id,
+            relationship_type: 'child',
+          });
+        if (childError2) {
+          console.warn('Failed to add child relationship from child to selected:', childError2);
+        }
+      }
+    }
+
+    // 3. PARENT RELATIONSHIPS - Only create the specific parent-child relationship requested
+    if (relationshipType === 'parent') {
+      console.log('Auto-parent: Processing parent relationship - ONLY creating the requested relationship');
+      
+      // Only create the specific parent-child relationship that was requested
+      // Don't automatically make the new parent a parent to all siblings
+      // This prevents creating incorrect relationships
+      
+      console.log('Auto-parent: Only creating parent-child relationship between', newMember.first_name, 'and', selectedFamilyMember.first_name);
+    }
+
+    // 4. CHILD RELATIONSHIPS - Auto-create sibling relationships with existing children
+    if (relationshipType === 'child') {
+      console.log('Auto-child: Processing child relationship');
+      
+      // Find all existing children of the selected family member
+      // Only look for relationships where selectedFamilyMember is the PARENT (person1_id)
+      const existingChildren = existingRelationships.filter(rel =>
+        rel.person1_id === selectedFamilyMember.id && rel.relationship_type === 'parent'
+      );
+
+      console.log('Auto-child: Found existing children:', existingChildren.length);
+
+      // Create sibling relationships between the new child and all existing children
+      for (const childRel of existingChildren) {
+        const existingChildId = childRel.person2_id; // person2_id is always the child when person1_id is the parent
+        
+        if (existingChildId !== newMember.id) { // Don't create self-sibling relationship
+          // Add sibling relationship
+          const { error: siblingError1 } = await supabase
+            .from('relationships')
+            .insert({
+              user_id: user!.id,
+              person1_id: newMember.id,
+              person2_id: existingChildId,
+              relationship_type: 'sibling',
+            });
+          if (siblingError1) {
+            console.warn('Failed to add sibling relationship:', siblingError1);
+          }
+
+          // Add reciprocal sibling relationship
+          const { error: siblingError2 } = await supabase
+            .from('relationships')
+            .insert({
+              user_id: user!.id,
+              person1_id: existingChildId,
+              person2_id: newMember.id,
+              relationship_type: 'sibling',
+            });
+          if (siblingError2) {
+              console.warn('Failed to add reciprocal sibling relationship:', siblingError2);
+          }
+        }
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +263,7 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
             first_name: newMemberFirstName,
             last_name: newMemberLastName,
             birth_date: birthDate || null,
+            death_date: deathDate || null,
             gender: gender || null,
           })
           .select()
@@ -133,6 +336,9 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
               console.warn('Failed to add reciprocal relationship:', reciprocalError);
             }
           }
+
+          // Auto-relationship detection and creation
+          await createAutoRelationships(newMember, selectedFamilyMember, newRelatedRelationshipType);
         }
 
         if (onRelationAdded) onRelationAdded(newMember);
@@ -140,6 +346,7 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
         setNewMemberFirstName('');
         setNewMemberLastName('');
         setBirthDate('');
+        setDeathDate('');
         setGender('');
         setNewRelatedRelationshipType('');
       } catch (err: any) {
@@ -271,6 +478,16 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
                   id="newMemberBirthDate"
                   value={birthDate}
                   onChange={(e) => setBirthDate(e.target.value)}
+                />
+              </div>
+              <div className="mb-3">
+                <label htmlFor="newMemberDeathDate" className="form-label">Death Date (Optional)</label>
+                <input
+                  type="date"
+                  className="form-control"
+                  id="newMemberDeathDate"
+                  value={deathDate}
+                  onChange={(e) => setDeathDate(e.target.value)}
                 />
               </div>
               <div className="mb-3">
