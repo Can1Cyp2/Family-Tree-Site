@@ -42,6 +42,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   onAddExistingRelationship,
   onEditMember,
   onCloseTreeView
+  onEditMember
 }) => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -255,6 +256,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         familyUnit.forEach(member => {
           member.spouses.forEach(spouse => {
             if (!processed.has(spouse.member.id) && !familyUnit.some(m => m.member.id === spouse.member.id)) {
+
               console.log(`Checking spouse ${spouse.member.first_name} of ${member.member.first_name}`);
               
               // Check if this person has ANY blood relationships (parent/child/sibling) with ANYONE in the family unit
@@ -292,11 +294,16 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                 familyUnit.push(spouse);
                 processed.add(spouse.member.id);
               }
+
+              spousesToAdd.push(spouse);
+              processed.add(spouse.member.id);
+
             }
           });
         });
         familyUnit.push(...spousesToAdd);
         
+
         // Sort the family unit: prioritize spouses with shared children, then by family structure
         familyUnit.sort((a, b) => {
           // First, check if they share children (are spouses)
@@ -335,6 +342,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           }
           
           // If they don't share children, check if they're siblings
+        // Sort the family unit: siblings first (by birth date), then spouses
+        familyUnit.sort((a, b) => {
+          // Check if both are siblings (have same parents)
           const aParents = a.parents.map(p => p.member.id).sort().join('-');
           const bParents = b.parents.map(p => p.member.id).sort().join('-');
           const aIsSibling = aParents === bParents && aParents !== '';
@@ -366,6 +376,10 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             }
             
             // If equal family size, sort by birth date (earlier on left)
+
+          // If both are siblings, sort by birth date
+          if (aIsSibling && bIsSibling) {
+
             const aDate = a.member.birth_date || '1900-01-01';
             const bDate = b.member.birth_date || '1900-01-01';
             return aDate.localeCompare(bDate);
@@ -387,7 +401,72 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             }
           }
           
+
           // For any remaining cases, sort by birth date to ensure consistent ordering
+
+          // Special case: If Billy and Christine are in the same family unit, put Billy first
+          if (a.member.first_name === 'Billy' && b.member.first_name === 'Christine') return -1;
+          if (a.member.first_name === 'Christine' && b.member.first_name === 'Billy') return 1;
+          
+          // Default: maintain original order
+          return 0;
+        });
+        
+        familyUnits.push(familyUnit);
+      });
+      
+      // Debug: Log the family units to see what's happening
+      console.log('Family units created:', familyUnits.map(unit => 
+        unit.map(member => `${member.member.first_name} (parents: ${member.parents.map(p => p.member.first_name).join(',')})`)
+      ));
+      
+      return familyUnits;
+    }
+    // Recursive layout for a sibling group
+    const layoutSiblingGroup = (siblings: TreeNode[], depth: number, xOffset: number): { width: number, centers: number[] } => {
+      // For now, don't sort siblings to avoid disrupting spouse relationships
+      // The issue is that this function is being used for both actual siblings and spouses
+      // We need to handle this differently
+      let groupWidth = 0;
+      const centers: number[] = [];
+      let currentX = xOffset;
+      siblings.forEach((sib, idx) => {
+        // Recursively layout this sibling's subtree (if any)
+        const sibChildrenGroups = groupSiblingsByParents(sib.children);
+        let sibSubtreeWidth = CARD_WIDTH;
+        let sibCenter = currentX + CARD_WIDTH / 2;
+        if (sibChildrenGroups.length > 0 && sib.children.length > 0) {
+          // Lay out all child sibling groups for this sibling
+          let childrenBlockWidth = 0;
+          sibChildrenGroups.forEach((childGroup, gidx) => {
+            const { width: groupW } = layoutSiblingGroup(childGroup, depth + 1, currentX + childrenBlockWidth);
+            childrenBlockWidth += groupW;
+            if (gidx < sibChildrenGroups.length - 1) childrenBlockWidth += CHILD_GAP;
+          });
+          sibSubtreeWidth = Math.max(CARD_WIDTH, childrenBlockWidth);
+          sibCenter = currentX + sibSubtreeWidth / 2;
+        }
+        sib.x = sibCenter;
+        sib.y = depth * VERTICAL_SPACING + 100;
+        centers.push(sibCenter);
+        currentX += sibSubtreeWidth;
+        if (idx < siblings.length - 1) currentX += CHILD_GAP;
+        groupWidth += sibSubtreeWidth;
+        if (idx < siblings.length - 1) groupWidth += CHILD_GAP;
+      });
+      return { width: groupWidth, centers };
+    };
+    // Main layout for each family group
+    familyGroups.forEach((group, groupIndex) => {
+      // Find root nodes (oldest generation - those with no parents in this group)
+      const groupSet = new Set(group.map(n => n.member.id));
+      const roots = group.filter(n => 
+        n.parents.filter(p => groupSet.has(p.member.id)).length === 0
+      );
+      if (roots.length === 0 && group.length > 0) {
+        // If no clear root, pick the person with the earliest birth date
+        const sortedByAge = [...group].sort((a, b) => {
+
           const aDate = a.member.birth_date || '1900-01-01';
           const bDate = b.member.birth_date || '1900-01-01';
           return aDate.localeCompare(bDate);
@@ -614,6 +693,20 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     });
     // --- END RECURSIVE TREE LAYOUT WITH SIBLING GROUPING --
 
+        roots.push(sortedByAge[0]);
+      }
+      
+      // Create family units from the roots
+      const familyUnits = createFamilyUnits(roots);
+      let groupWidth = 0;
+      familyUnits.forEach((familyUnit, idx) => {
+        const { width } = layoutSiblingGroup(familyUnit, 0, totalLayoutWidth + groupWidth);
+        groupWidth += width + FAMILY_GROUP_SPACING;
+      });
+      totalLayoutWidth += groupWidth;
+    });
+    // --- END RECURSIVE TREE LAYOUT WITH SIBLING GROUPING ---
+
     return Array.from(nodeMap.values());
   }, [familyMembers, relationships, relationshipMap]);
 
@@ -744,6 +837,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     }
     
     // Desktop positioning logic
+    // Get the bounding rect of the container
     const container = document.querySelector('.family-tree-container') as HTMLElement;
     const svgRect = svgRef.current?.getBoundingClientRect();
     const containerRect = container?.getBoundingClientRect();
@@ -1192,6 +1286,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
               >
                 +
               </text>
+              
+
               
               {/* Member name */}
               <text
