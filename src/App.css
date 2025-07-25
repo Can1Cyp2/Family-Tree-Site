@@ -32,6 +32,19 @@
   opacity: 0.8;
 }
 
+.navbar-brand-container {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.navbar-brand-container:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
 .navbar-logo {
   width: 48px;
   height: 48px;
@@ -76,6 +89,7 @@
   align-items: center;
   z-index: 9999;
   animation: fadeIn 0.3s ease-in-out;
+  pointer-events: none; /* Added to prevent interference */
 }
 
 .hover-gif-container {
