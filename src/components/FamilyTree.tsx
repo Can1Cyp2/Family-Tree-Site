@@ -56,6 +56,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const svgRef = useRef<SVGSVGElement>(null);
+  const miniMapRef = useRef<SVGSVGElement>(null);
+  const [showMiniMap, setShowMiniMap] = useState(true);
+  const [miniMapDragging, setMiniMapDragging] = useState(false);
 
   // Layout constants
   const CARD_WIDTH = 180;
@@ -66,6 +69,12 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   const FAMILY_GROUP_SPACING = 350; // Space between disconnected family groups
   const MIN_CHILD_SPACING = 250; // (legacy, not used for child layout)
   const CHILD_GAP = 40; // New: gap between children to prevent overlap
+
+  // Mini map constants
+  const MINI_MAP_WIDTH = 200;
+  const MINI_MAP_HEIGHT = 150;
+  const MINI_MAP_CARD_WIDTH = 6;
+  const MINI_MAP_CARD_HEIGHT = 4;
 
   // Handle window resize
   useEffect(() => {
@@ -758,54 +767,116 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     return Array.from(nodeMap.values());
   }, [familyMembers, relationships, relationshipMap]);
 
-  // Auto-fit tree to mobile screen on initial load
-  useEffect(() => {
-    if (window.innerWidth > 768) return; // Only run on mobile
-    if (!svgRef.current || treeNodes.length === 0) return;
+  // Calculate tree bounds for mini map
+  const treeBounds = useMemo(() => {
+    if (treeNodes.length === 0) {
+      return { minX: 0, maxX: 400, minY: 0, maxY: 300, width: 400, height: 300 };
+    }
 
-    // Find bounds of all nodes
-    const minX = Math.min(...treeNodes.map(n => n.x));
-    const maxX = Math.max(...treeNodes.map(n => n.x));
-    const minY = Math.min(...treeNodes.map(n => n.y));
-    const maxY = Math.max(...treeNodes.map(n => n.y));
+    const minX = Math.min(...treeNodes.map(n => n.x - CARD_WIDTH/2));
+    const maxX = Math.max(...treeNodes.map(n => n.x + CARD_WIDTH/2));
+    const minY = Math.min(...treeNodes.map(n => n.y - CARD_HEIGHT/2));
+    const maxY = Math.max(...treeNodes.map(n => n.y + CARD_HEIGHT/2));
 
-    const treeWidth = maxX - minX + 180; // CARD_WIDTH
-    const treeHeight = maxY - minY + 120; // CARD_HEIGHT
+    return {
+      minX,
+      maxX,
+      minY,
+      maxY,
+      width: maxX - minX,
+      height: maxY - minY
+    };
+  }, [treeNodes]);
 
-    const screenW = window.innerWidth;
-    const screenH = window.innerHeight;
+  // Mini map interaction handlers
+  const handleMiniMapClick = useCallback((e: React.MouseEvent) => {
+    const miniMapSvg = miniMapRef.current;
+    if (!miniMapSvg) return;
 
-    // Calculate best zoom to fit with minimal padding
-    const zoomX = (screenW * 0.95) / treeWidth;
-    const zoomY = (screenH * 0.95) / treeHeight;
-    const fitZoom = Math.max(0.8, Math.min(zoomX, zoomY, 1.0)); // Min zoom 0.8, max 1.0
+    const rect = miniMapSvg.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
 
-    setZoom(fitZoom);
+    // Convert mini map coordinates to tree coordinates
+    const scaleX = treeBounds.width / MINI_MAP_WIDTH;
+    const scaleY = treeBounds.height / MINI_MAP_HEIGHT;
     
-    // If we have a first member, center on them; otherwise center the entire tree
-    if (firstMember) {
-      const firstMemberNode = treeNodes.find(n => n.member.id === firstMember.id);
-      if (firstMemberNode) {
-        // Center on the first member
-        setPan({
-          x: (screenW / 2) - firstMemberNode.x * fitZoom,
-          y: (screenH / 2) - firstMemberNode.y * fitZoom
-        });
-      } else {
-        // Fallback to centering the entire tree
-        setPan({
-          x: (screenW / 2) - ((minX + maxX) / 2) * fitZoom,
-          y: (screenH / 2) - ((minY + maxY) / 2) * fitZoom
-        });
-      }
-    } else {
-      // Center the tree
+    const treeX = treeBounds.minX + (clickX * scaleX);
+    const treeY = treeBounds.minY + (clickY * scaleY);
+
+    // Center the main view on the clicked point
+    const container = document.querySelector('.family-tree-container') as HTMLElement;
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
+      const centerX = containerRect.width / 2;
+      const centerY = containerRect.height / 2;
+      
       setPan({
-        x: (screenW / 2) - ((minX + maxX) / 2) * fitZoom,
-        y: (screenH / 2) - ((minY + maxY) / 2) * fitZoom
+        x: centerX - treeX * zoom,
+        y: centerY - treeY * zoom
       });
     }
-  }, [treeNodes, firstMember]);
+  }, [zoom, treeBounds]);
+
+  const handleMiniMapMouseDown = useCallback((e: React.MouseEvent) => {
+    setMiniMapDragging(true);
+    handleMiniMapClick(e);
+  }, [handleMiniMapClick]);
+
+  const handleMiniMapMouseMove = useCallback((e: React.MouseEvent) => {
+    if (miniMapDragging) {
+      handleMiniMapClick(e);
+    }
+  }, [miniMapDragging, handleMiniMapClick]);
+
+  const handleMiniMapMouseUp = useCallback(() => {
+    setMiniMapDragging(false);
+  }, []);
+
+
+
+    // Auto-fit tree to mobile screen on initial load
+    useEffect(() => {
+      if (window.innerWidth > 768) return; // Only run on mobile
+      if (!svgRef.current || treeNodes.length === 0) return;
+  
+      const treeWidth = treeBounds.width;
+      const treeHeight = treeBounds.height;
+  
+      const screenW = window.innerWidth;
+      const screenH = window.innerHeight;
+  
+      // Calculate best zoom to fit with minimal padding
+      const zoomX = (screenW * 0.95) / treeWidth;
+      const zoomY = (screenH * 0.95) / treeHeight;
+      const fitZoom = Math.max(0.8, Math.min(zoomX, zoomY, 1.0)); // Min zoom 0.8, max 1.0
+  
+      setZoom(fitZoom);
+      
+      // If we have a first member, center on them; otherwise center the entire tree
+      if (firstMember) {
+        const firstMemberNode = treeNodes.find(n => n.member.id === firstMember.id);
+        if (firstMemberNode) {
+          // Center on the first member
+          setPan({
+            x: (screenW / 2) - firstMemberNode.x * fitZoom,
+            y: (screenH / 2) - firstMemberNode.y * fitZoom
+          });
+        } else {
+          // Fallback to centering the entire tree
+          setPan({
+            x: (screenW / 2) - ((treeBounds.minX + treeBounds.maxX) / 2) * fitZoom,
+            y: (screenH / 2) - ((treeBounds.minY + treeBounds.maxY) / 2) * fitZoom
+          });
+        }
+      } else {
+        // Center the tree
+        setPan({
+          x: (screenW / 2) - ((treeBounds.minX + treeBounds.maxX) / 2) * fitZoom,
+          y: (screenH / 2) - ((treeBounds.minY + treeBounds.maxY) / 2) * fitZoom
+        });
+      }
+    }, [treeNodes, firstMember, treeBounds]);
 
   // Center on first member for desktop users on initial load
   useEffect(() => {
@@ -1077,6 +1148,36 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     return lines;
   };
 
+  // Calculate current viewport bounds for mini map
+  const viewportBounds = useMemo(() => {
+    const container = document.querySelector('.family-tree-container') as HTMLElement;
+    if (!container) return { x: 0, y: 0, width: 100, height: 100 };
+
+    const containerRect = container.getBoundingClientRect();
+    
+    // Convert viewport to tree coordinates
+    const viewportLeft = -pan.x / zoom;
+    const viewportTop = -pan.y / zoom;
+    const viewportWidth = containerRect.width / zoom;
+    const viewportHeight = containerRect.height / zoom;
+
+    return {
+      x: viewportLeft,
+      y: viewportTop,
+      width: viewportWidth,
+      height: viewportHeight
+    };
+  }, [pan, zoom]);
+
+  if (familyMembers.length === 0) {
+    return (
+      <div className="empty-state">
+        <h2>Family Tree</h2>
+        <p>No family members added yet. Add some to see the tree!</p>
+      </div>
+    );
+  }
+
   if (familyMembers.length === 0) {
     return (
       <div className="empty-state">
@@ -1153,6 +1254,137 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         )}
       </div>
 
+      {/* Mini Map */}
+      {!isMobile && showMiniMap && treeNodes.length > 0 && (
+        <div className="mini-map-container" style={{
+          position: 'absolute',
+          bottom: '20px',
+          left: '20px',
+          width: `${MINI_MAP_WIDTH}px`,
+          height: `${MINI_MAP_HEIGHT}px`,
+          background: 'rgba(255, 255, 255, 0.95)',
+          border: '2px solid #E5E7EB',
+          borderRadius: '8px',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+          zIndex: 1000,
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            position: 'absolute',
+            top: '4px',
+            left: '4px',
+            right: '4px',
+            height: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '12px',
+            fontWeight: '600',
+            color: '#374151',
+            background: 'rgba(249, 250, 251, 0.9)',
+            borderRadius: '4px',
+            padding: '0 6px'
+          }}>
+            <span>Mini Map</span>
+            <button
+              onClick={() => setShowMiniMap(false)}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '14px',
+                color: '#6B7280',
+                padding: '0',
+                width: '16px',
+                height: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              title="Hide mini map"
+            >
+              ×
+            </button>
+          </div>
+          <svg
+            ref={miniMapRef}
+            width={MINI_MAP_WIDTH}
+            height={MINI_MAP_HEIGHT}
+            style={{
+              cursor: 'pointer',
+              marginTop: '24px'
+            }}
+            onMouseDown={handleMiniMapMouseDown}
+            onMouseMove={handleMiniMapMouseMove}
+            onMouseUp={handleMiniMapMouseUp}
+            onMouseLeave={handleMiniMapMouseUp}
+          >
+            {/* Tree nodes in mini map */}
+            {treeNodes.map(node => {
+              // Use a more compact scaling with padding
+              const padding = 15;
+              const miniX = padding + ((node.x - treeBounds.minX) / treeBounds.width) * (MINI_MAP_WIDTH - padding * 2);
+              const miniY = padding + ((node.y - treeBounds.minY) / treeBounds.height) * (MINI_MAP_HEIGHT - padding * 2);
+              
+              return (
+                <rect
+                  key={node.member.id}
+                  x={miniX - MINI_MAP_CARD_WIDTH/2}
+                  y={miniY - MINI_MAP_CARD_HEIGHT/2}
+                  width={MINI_MAP_CARD_WIDTH}
+                  height={MINI_MAP_CARD_HEIGHT}
+                  fill={selectedMember?.id === node.member.id ? '#6366F1' : 
+                        node.member.gender === 'male' ? '#3B82F6' : 
+                        node.member.gender === 'female' ? '#EC4899' : 
+                        node.member.gender === 'other' ? '#10B981' : '#9CA3AF'}
+                  stroke={node.isSpouse ? '#FFFFFF' : 'none'}
+                  strokeWidth={node.isSpouse ? '1' : '0'}
+                  rx="1"
+                />
+              );
+            })}
+            
+            {/* Viewport indicator */}
+            <rect
+              x={Math.max(15, Math.min(MINI_MAP_WIDTH - 15 - 1, 15 + ((viewportBounds.x - treeBounds.minX) / treeBounds.width) * (MINI_MAP_WIDTH - 30)))}
+              y={Math.max(15, Math.min(MINI_MAP_HEIGHT - 15 - 1, 15 + ((viewportBounds.y - treeBounds.minY) / treeBounds.height) * (MINI_MAP_HEIGHT - 30)))}
+              width={Math.min(MINI_MAP_WIDTH - 30, Math.max(1, (viewportBounds.width / treeBounds.width) * (MINI_MAP_WIDTH - 30)))}
+              height={Math.min(MINI_MAP_HEIGHT - 30, Math.max(1, (viewportBounds.height / treeBounds.height) * (MINI_MAP_HEIGHT - 30)))}
+              fill="none"
+              stroke="#F59E0B"
+              strokeWidth="2"
+              rx="2"
+            />
+          </svg>
+        </div>
+      )}
+
+      {/* Mini map toggle button (when hidden) */}
+      {!isMobile && !showMiniMap && (
+        <button
+          onClick={() => setShowMiniMap(true)}
+          style={{
+            position: 'absolute',
+            bottom: '20px',
+            left: '20px',
+            background: 'rgba(255, 255, 255, 0.95)',
+            border: '2px solid #E5E7EB',
+            borderRadius: '8px',
+            padding: '8px 12px',
+            cursor: 'pointer',
+            fontSize: '12px',
+            fontWeight: '600',
+            color: '#374151',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            zIndex: 1000
+          }}
+          title="Show mini map"
+        >
+          Show Mini Map
+        </button>
+      )}
+
+      {/* Main SVG */}
       <svg
         ref={svgRef}
         width="100%"
