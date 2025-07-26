@@ -85,6 +85,19 @@
   fill: #eef2ff !important;
 }
 
+/* First Member Highlighting */
+.member-card.first-member rect {
+  stroke: #f59e0b !important;
+  stroke-width: 3 !important;
+  filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.4));
+}
+
+.member-card.first-member:hover rect {
+  stroke: #f59e0b !important;
+  stroke-width: 4 !important;
+  filter: drop-shadow(0 0 12px rgba(245, 158, 11, 0.6));
+}
+
 /* Spouse Cards */
 .spouse-card {
   opacity: 0.7;
@@ -93,8 +106,10 @@
 
 .spouse-card:hover {
   opacity: 1;
-  transform: translateX(40px) translateY(-5px);
   z-index: 10 !important;
+  /* highline the card: transform was not working */
+  stroke-width: 3 !important;
+  filter: drop-shadow(0 0 12px rgba(99, 102, 241, 0.6));
 }
 
 .spouse-card rect {

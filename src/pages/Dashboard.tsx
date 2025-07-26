@@ -21,6 +21,9 @@ const Dashboard: React.FC = () => {
   const [memberToEdit, setMemberToEdit] = useState<FamilyMember | null>(null);
   const [selectedFamilyMember, setSelectedFamilyMember] = useState<FamilyMember | null>(null);
 
+  // Get the first member created (member with earliest created_at timestamp)
+  const firstMember = familyMembers.length > 0 ? familyMembers[0] : null;
+
   useEffect(() => {
     if (!user) {
       navigate('/login');
@@ -339,6 +342,7 @@ const Dashboard: React.FC = () => {
               }}
               onEditMember={handleEditMember}
               onClosePopup={() => setSelectedFamilyMember(null)}
+              firstMember={firstMember}
             />
         )}
 
