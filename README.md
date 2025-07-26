@@ -1,4 +1,33 @@
-# Getting Started with Create React App
+# Family Tree App
+
+A React-based family tree application that allows you to create, manage, and visualize family relationships. Built with TypeScript, React, and Supabase for data storage.
+
+## Features
+
+- **Interactive Family Tree Visualization**: Beautiful, responsive family tree layout with zoom and pan capabilities
+- **Add Family Members**: Easily add new family members with detailed information
+- **Manage Relationships**: Create parent-child, spouse, and sibling relationships
+- **Add Parents Without Disruption**: The app intelligently preserves the existing tree structure when adding parents to existing members
+- **Mobile-Friendly**: Responsive design that works on both desktop and mobile devices
+- **Real-time Updates**: Changes are immediately reflected in the tree visualization
+
+## Adding Parents
+
+The app features a smart tree layout algorithm that preserves the existing family structure when adding parents:
+
+- **Preserves Main Family Line**: When adding parents to existing members, the app maintains the visual structure by prioritizing the family line with the most descendants
+- **No Layout Disruption**: Adding parents won't shift or reorganize your existing family tree layout
+- **Intuitive Positioning**: New parents are positioned above their children while maintaining the overall tree structure
+
+### How to Add Parents
+
+1. Click on any family member in the tree
+2. Click the "+" button to add a related member
+3. Select "Parent" as the relationship type
+4. Fill in the new parent's information
+5. The parent will be added above the selected member without disrupting the existing layout
+
+## Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
