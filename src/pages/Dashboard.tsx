@@ -338,6 +338,7 @@ const Dashboard: React.FC = () => {
                 setShowAddRelationFormMode('add_existing_relation');
               }}
               onEditMember={handleEditMember}
+              onClosePopup={() => setSelectedFamilyMember(null)}
             />
         )}
 

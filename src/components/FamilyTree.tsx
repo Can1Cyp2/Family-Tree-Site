@@ -14,6 +14,7 @@ interface FamilyTreeProps {
   onAddExistingRelationship: (member: FamilyMember) => void;
   onEditMember: (member: FamilyMember) => void;
   onCloseTreeView?: () => void; // Optional close handler
+  onClosePopup?: () => void; // Callback to close popup
 }
 
 interface TreeNode {
@@ -41,7 +42,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   onAddRelatedMember,
   onAddExistingRelationship,
   onEditMember,
-  onCloseTreeView
+  onCloseTreeView,
+  onClosePopup
 }) => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -215,10 +217,12 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       members: group.map(n => `${n.member.first_name} (parents: ${n.parents.map(p => p.member.first_name).join(',')})`)
     })));
 
-    // --- RECURSIVE TREE LAYOUT WITH SIBLING GROUPING ---
+    // --- PRESERVE EXISTING STRUCTURE TREE LAYOUT ---
     let totalLayoutWidth = 100;
+    
     // Helper to get a unique key for a set of parents
     const getParentsKey = (node: TreeNode) => node.parents.map(p => p.member.id).sort().join('-');
+    
     // Helper to group siblings by their parent set
     function groupSiblingsByParents(nodes: TreeNode[]): TreeNode[][] {
       const groups: { [key: string]: TreeNode[] } = {};
@@ -230,7 +234,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       return Object.values(groups);
     }
     
-        // Helper to create family units (siblings + their spouses)
+    // Helper to create family units (siblings + their spouses)
     function createFamilyUnits(nodes: TreeNode[]): TreeNode[][] {
       const familyUnits: TreeNode[][] = [];
       const processed = new Set<string>();
@@ -256,6 +260,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           member.spouses.forEach(spouse => {
             if (!processed.has(spouse.member.id) && !familyUnit.some(m => m.member.id === spouse.member.id)) {
               console.log(`Checking spouse ${spouse.member.first_name} of ${member.member.first_name}`);
+              
+
               
               // Check if this person has ANY blood relationships (parent/child/sibling) with ANYONE in the family unit
               const hasBloodRelationship = familyUnit.some(familyMember => {
@@ -403,6 +409,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       
       return familyUnits;
     }
+    
     // Recursive layout for a sibling group
     const layoutSiblingGroup = (siblings: TreeNode[], depth: number, xOffset: number): { width: number, centers: number[] } => {
       // Separate blood relatives from spouses
@@ -566,42 +573,115 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         centers.push(sibCenter);
       });
       
-      // Position spouses to the left of their blood relatives, avoiding conflicts
-      spouses.forEach((spouse, idx) => {
-        if (spouse.spouseOf) {
-          // Position spouse behind and to the left of their blood relative with proper spacing
-          const spouseX = spouse.spouseOf.x - 150 - (idx * 30); // More space and stagger multiple spouses
-          spouse.x = spouseX;
-          spouse.y = spouse.spouseOf.y; // Same y position (behind)
-        }
-      });
+              // Position spouses to the left of their blood relatives, avoiding conflicts
+        spouses.forEach((spouse, idx) => {
+          if (spouse.spouseOf) {
+            // Position spouse behind and to the left of their blood relative with proper spacing
+            const spouseX = spouse.spouseOf.x - 150 - (idx * 30); // More space and stagger multiple spouses
+            spouse.x = spouseX;
+            spouse.y = spouse.spouseOf.y; // Same y position (behind)
+          }
+        });
       
       return { width: totalWidth, centers };
     };
-    // Main layout for each family group
+    
+    // Main layout for each family group - PRESERVE EXISTING STRUCTURE
     familyGroups.forEach((group, groupIndex) => {
-      // Find root nodes (oldest generation - those with no parents in this group)
+      // ORIGINAL CODE - Don't change this part
       const groupSet = new Set(group.map(n => n.member.id));
-      const roots = group.filter(n => 
+      
+      // Find nodes with no parents in this group (potential roots)
+      const nodesWithNoParents = group.filter(n => 
         n.parents.filter(p => groupSet.has(p.member.id)).length === 0
       );
       
-      console.log(`Family group ${groupIndex}: Found ${roots.length} root nodes:`, 
-        roots.map(r => `${r.member.first_name} ${r.member.last_name}`));
+      // Find nodes with the most descendants (likely to be the "main" family line)
+      const calculateDescendantCount = (node: TreeNode): number => {
+        let count = node.children.length;
+        node.children.forEach(child => {
+          count += calculateDescendantCount(child);
+        });
+        return count;
+      };
+
+      const nodesWithDescendants = group.map(node => ({
+        node,
+        descendantCount: calculateDescendantCount(node)
+      })).sort((a, b) => b.descendantCount - a.descendantCount);
+
+      // Determine the best root nodes to preserve structure
+      let roots: TreeNode[] = [];
+
+      let parentsToPositionAbove: TreeNode[] = [];
+      let actualRoots: TreeNode[] = [];
       
-      console.log(`Family group ${groupIndex}: All members and their parents:`, 
-        group.map(n => `${n.member.first_name} -> parents: [${n.parents.map(p => p.member.first_name).join(', ')}]`));
+      // Step 1: Identify parents that should be positioned above their children
+      nodesWithNoParents.forEach(node => {
+        const shouldBeAbove = (
+          node.children.length >= 2 &&                    // Has multiple children
+          node.siblings.length === 0 &&                   // No siblings  
+          node.spouses.length === 0 &&                    // No spouses
+          node.children.every(child =>                     // All children have siblings (form a sibling group)
+            child.siblings.length > 0 || 
+            node.children.length > 1  // OR this parent has multiple children (making them siblings)
+          )
+        );
+        
+        if (shouldBeAbove) {
+          parentsToPositionAbove.push(node);
+          console.log(`${node.member.first_name} will be positioned above children:`, 
+            node.children.map(c => c.member.first_name).join(', '));
+        } else {
+          actualRoots.push(node);
+          console.log(`${node.member.first_name} will be included in main layout`);
+        }
+      });
       
-      if (roots.length === 0 && group.length > 0) {
-        // If no clear root, pick the person with the earliest birth date
+      // Step 2: If we removed parents to position above, use their children as roots instead
+      if (parentsToPositionAbove.length > 0) {
+        const childrenOfAboveParents = new Set<TreeNode>();
+        
+        parentsToPositionAbove.forEach(parent => {
+          parent.children.forEach(child => {
+            if (groupSet.has(child.member.id)) {
+              childrenOfAboveParents.add(child);
+            }
+          });
+        });
+        
+        // Add these children to our actual roots
+        childrenOfAboveParents.forEach(child => {
+          if (!actualRoots.includes(child)) {
+            actualRoots.push(child);
+          }
+        });
+      }
+      
+      // Step 3: Determine final roots for layout
+      if (actualRoots.length > 0) {
+        roots = actualRoots;
+        console.log(`Family group ${groupIndex}: Using actual roots:`, 
+          roots.map(r => `${r.member.first_name} ${r.member.last_name}`));
+      } else if (nodesWithDescendants.length > 0) {
+        // Fallback to descendant count
+        roots = [nodesWithDescendants[0].node];
+        console.log(`Family group ${groupIndex}: Using descendant count fallback:`, 
+          `${roots[0].member.first_name} ${roots[0].member.last_name}`);
+      } else {
+        // Final fallback
         const sortedByAge = [...group].sort((a, b) => {
           const aDate = a.member.birth_date || '1900-01-01';
           const bDate = b.member.birth_date || '1900-01-01';
           return aDate.localeCompare(bDate);
         });
-        roots.push(sortedByAge[0]);
-        console.log(`Family group ${groupIndex}: No roots found, using oldest: ${sortedByAge[0].member.first_name}`);
+        roots = [sortedByAge[0]];
+        console.log(`Family group ${groupIndex}: Using oldest member as root:`, 
+          `${roots[0].member.first_name} ${roots[0].member.last_name}`);
       }
+      
+      console.log(`Family group ${groupIndex}: All members and their parents:`, 
+        group.map(n => `${n.member.first_name} -> parents: [${n.parents.map(p => p.member.first_name).join(', ')}]`));
       
       // Create family units from the roots
       const familyUnits = createFamilyUnits(roots);
@@ -610,9 +690,68 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         const { width } = layoutSiblingGroup(familyUnit, 0, totalLayoutWidth + groupWidth);
         groupWidth += width + FAMILY_GROUP_SPACING;
       });
+      
+      // Step 4: Position the identified parents above their children
+      const allLayoutedNodes = new Set<string>();
+      
+      // Collect all nodes that were positioned by the layout
+      const collectLayoutedNodes = (node: TreeNode) => {
+        allLayoutedNodes.add(node.member.id);
+        node.children.forEach(child => collectLayoutedNodes(child));
+        node.spouses.forEach(spouse => allLayoutedNodes.add(spouse.member.id));
+      };
+      
+      familyUnits.forEach(unit => {
+        unit.forEach(member => collectLayoutedNodes(member));
+      });
+      
+      // Position the pre-identified parents above their children
+      parentsToPositionAbove.forEach(parent => {
+        const childrenInLayout = parent.children.filter(child => allLayoutedNodes.has(child.member.id));
+        
+        if (childrenInLayout.length > 0) {
+          // Calculate average X position of all children
+          const avgX = childrenInLayout.reduce((sum, child) => sum + child.x, 0) / childrenInLayout.length;
+          const minChildY = Math.min(...childrenInLayout.map(child => child.y));
+          
+          // Position parent above children
+          parent.x = avgX;
+          parent.y = minChildY - VERTICAL_SPACING;
+          
+          // Mark parent as positioned
+          allLayoutedNodes.add(parent.member.id);
+          
+          console.log(`Positioned parent ${parent.member.first_name} at (${Math.round(parent.x)}, ${Math.round(parent.y)}) above children:`, 
+            childrenInLayout.map(c => c.member.first_name).join(', '));
+        }
+      });
+      
+      // Handle any remaining unpositioned nodes
+      group.forEach(node => {
+        if (!allLayoutedNodes.has(node.member.id)) {
+          const childrenInLayout = node.children.filter(child => allLayoutedNodes.has(child.member.id));
+          
+          if (childrenInLayout.length > 0) {
+            // Position above children
+            const avgX = childrenInLayout.reduce((sum, child) => sum + child.x, 0) / childrenInLayout.length;
+            const minChildY = Math.min(...childrenInLayout.map(child => child.y));
+            
+            node.x = avgX;
+            node.y = minChildY - VERTICAL_SPACING;
+            
+            console.log(`Positioned remaining parent ${node.member.first_name} above children`);
+          } else {
+            // Position separately
+            node.x = totalLayoutWidth + groupWidth + 200;
+            node.y = 100;
+            console.log(`Positioned orphaned node ${node.member.first_name} separately`);
+          }
+        }
+      });
+      
       totalLayoutWidth += groupWidth;
     });
-    // --- END RECURSIVE TREE LAYOUT WITH SIBLING GROUPING --
+    // --- END PRESERVE EXISTING STRUCTURE TREE LAYOUT --
 
     return Array.from(nodeMap.values());
   }, [familyMembers, relationships, relationshipMap]);
@@ -791,6 +930,13 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   const closePopup = () => {
     setShowMemberPopup(null);
   };
+
+  // Close popup when selected member is cleared or when a member is deleted
+  useEffect(() => {
+    if (!selectedMember && showMemberPopup) {
+      setShowMemberPopup(null);
+    }
+  }, [selectedMember, showMemberPopup]);
 
   const generateConnections = () => {
     const lines: JSX.Element[] = [];
@@ -1456,6 +1602,27 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                   </div>
 
                   <div className="relationship-group">
+                    <div className="relationship-label">Children:</div>
+                    {relations.children.length > 0 ? (
+                      <ul className="relationship-list">
+                        {relations.children.map(({ member: c, relationship: rel }) => (
+                          <li key={c.id} className="relationship-item">
+                            <span className="relationship-name">{c.first_name} {c.last_name}</span>
+                            <button
+                              onClick={() => onDeleteRelationship(rel.id)}
+                              className="delete-relationship-btn"
+                            >
+                              Delete
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <span className="relationship-none">None</span>
+                    )}
+                  </div>
+
+                  <div className="relationship-group">
                     <div className="relationship-label">Spouses:</div>
                     {relations.spouses.length > 0 ? (
                       <ul className="relationship-list">
@@ -1521,7 +1688,10 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
               Add Existing Relationship to {showMemberPopup.first_name}
             </button>
             <button
-              onClick={() => onDeleteMember(showMemberPopup.id)}
+              onClick={() => {
+                onDeleteMember(showMemberPopup.id);
+                closePopup(); // Close popup immediately when delete is clicked
+              }}
               className="popup-action-btn danger"
             >
               Delete {showMemberPopup.first_name}

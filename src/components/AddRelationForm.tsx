@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import { FamilyMember, Relationship } from '../types';
@@ -24,6 +24,12 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
 }) => {
   const { user } = useAuth();
   const [error, setError] = useState('');
+  
+  // Search states for existing relationships
+  const [person1Search, setPerson1Search] = useState('');
+  const [person2Search, setPerson2Search] = useState('');
+  const [showPerson1Dropdown, setShowPerson1Dropdown] = useState(false);
+  const [showPerson2Dropdown, setShowPerson2Dropdown] = useState(false);
 
   // State for 'add_new_related' mode
   const [newMemberFirstName, setNewMemberFirstName] = useState('');
@@ -37,6 +43,55 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
   const [person1Id, setPerson1Id] = useState<string>(selectedFamilyMember?.id || '');
   const [person2Id, setPerson2Id] = useState<string>('');
   const [existingRelationshipType, setExistingRelationshipType] = useState<'' | 'parent' | 'child' | 'spouse' | 'sibling'>('');
+
+  // Helper function to filter family members based on search term
+  const getFilteredMembers = (searchTerm: string, excludeId?: string) => {
+    if (!searchTerm.trim()) {
+      return familyMembers.filter(member => !excludeId || member.id !== excludeId);
+    }
+    
+    const searchLower = searchTerm.toLowerCase();
+    return familyMembers.filter(member => {
+      if (excludeId && member.id === excludeId) return false;
+      
+      const fullName = `${member.first_name} ${member.last_name}`.toLowerCase();
+      const firstName = member.first_name.toLowerCase();
+      const lastName = member.last_name.toLowerCase();
+      
+      return fullName.includes(searchLower) || 
+             firstName.includes(searchLower) || 
+             lastName.includes(searchLower);
+    });
+  };
+
+  // Helper function to get display name for a member ID
+  const getMemberDisplayName = (memberId: string) => {
+    const member = familyMembers.find(m => m.id === memberId);
+    return member ? `${member.first_name} ${member.last_name}` : '';
+  };
+
+  // Handle click outside to close dropdowns
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('.searchable-dropdown')) {
+        setShowPerson1Dropdown(false);
+        setShowPerson2Dropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Initialize search fields when selectedFamilyMember changes
+  useEffect(() => {
+    if (selectedFamilyMember) {
+      setPerson1Search(`${selectedFamilyMember.first_name} ${selectedFamilyMember.last_name}`);
+    }
+  }, [selectedFamilyMember]);
 
   // Auto-relationship detection and creation function
   const createAutoRelationships = async (
@@ -419,8 +474,8 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
   };
 
   return (
-    <div className="card" style={{ padding: '10px', margin: '0' }}>
-      <div className="card-body" style={{ padding: '10px' }}>
+    <div className="card" style={{ padding: '10px', margin: '0', marginBottom: '10px' }}>
+      <div className="card-body" style={{ padding: '10px', marginBottom: '80px'  }}>
         
         {mode === 'add_new_related' && (
           <h5 className="card-title" style={{ fontSize: '16px', marginBottom: '15px' }}>Add New Member {selectedFamilyMember ? `to ${selectedFamilyMember.first_name} ${selectedFamilyMember.last_name}` : ''}</h5>
@@ -501,10 +556,10 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
                     required
                   >
                     <option value="">Select Relationship</option>
-                    <option value="parent">Parent</option>
-                    <option value="child">Child</option>
-                    <option value="spouse">Spouse</option>
-                    <option value="sibling">Sibling</option>
+                    <option value="parent">Parent (will be positioned above {selectedFamilyMember.first_name})</option>
+                    <option value="child">Child (will be positioned below {selectedFamilyMember.first_name})</option>
+                    <option value="spouse">Spouse (will be positioned next to {selectedFamilyMember.first_name})</option>
+                    <option value="sibling">Sibling (will be positioned at the same level as {selectedFamilyMember.first_name})</option>
                   </select>
                 </div>
               )}
@@ -524,39 +579,149 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
                     disabled
                   />
                 ) : (
-                  <select
-                    className="form-select"
-                    id="person1"
-                    value={person1Id}
-                    onChange={(e) => setPerson1Id(e.target.value)}
-                    required
-                  >
-                    <option value="">Select a member</option>
-                    {familyMembers.map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.first_name} {member.last_name}
-                      </option>
-                    ))}
-                  </select>
+                  <div style={{ position: 'relative' }} className="searchable-dropdown">
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Search for a family member..."
+                      value={person1Search}
+                      onChange={(e) => {
+                        setPerson1Search(e.target.value);
+                        setShowPerson1Dropdown(true);
+                        if (!e.target.value.trim()) {
+                          setPerson1Id('');
+                        }
+                      }}
+                      onFocus={() => setShowPerson1Dropdown(true)}
+                      required
+                    />
+                    {showPerson1Dropdown && (
+                      <div 
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          backgroundColor: 'white',
+                          border: '1px solid #ced4da',
+                          borderRadius: '0.375rem',
+                          maxHeight: '200px',
+                          overflowY: 'auto',
+                          zIndex: 1000,
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                        }}
+                      >
+                        {getFilteredMembers(person1Search, person2Id).map((member) => (
+                          <div
+                            key={member.id}
+                            style={{
+                              padding: '8px 12px',
+                              cursor: 'pointer',
+                              borderBottom: '1px solid #f8f9fa',
+                              backgroundColor: person1Id === member.id ? '#e9ecef' : 'white'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = '#f8f9fa';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = person1Id === member.id ? '#e9ecef' : 'white';
+                            }}
+                            onClick={() => {
+                              setPerson1Id(member.id);
+                              setPerson1Search(`${member.first_name} ${member.last_name}`);
+                              setShowPerson1Dropdown(false);
+                            }}
+                          >
+                            {member.first_name} {member.last_name}
+                          </div>
+                        ))}
+                        {getFilteredMembers(person1Search, person2Id).length === 0 && (
+                          <div style={{ padding: '8px 12px', color: '#6c757d', fontStyle: 'italic' }}>
+                            No members found
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {person1Id && (
+                      <div style={{ marginTop: '4px', fontSize: '12px', color: '#6c757d' }}>
+                        Selected: {getMemberDisplayName(person1Id)}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
               <div className="mb-3" style={{ marginBottom: '10px' }}>
                 <label htmlFor="person2" className="form-label">Family Member 2</label>
-                <select
-                  className="form-select"
-                  id="person2"
-                  value={person2Id}
-                  onChange={(e) => setPerson2Id(e.target.value)}
-                  required
-                >
-                  <option value="">Select a member</option>
-                  {familyMembers.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.first_name} {member.last_name}
-                    </option>
-                  ))}
-                </select>
+                <div style={{ position: 'relative' }} className="searchable-dropdown">
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Search for a family member..."
+                    value={person2Search}
+                    onChange={(e) => {
+                      setPerson2Search(e.target.value);
+                      setShowPerson2Dropdown(true);
+                      if (!e.target.value.trim()) {
+                        setPerson2Id('');
+                      }
+                    }}
+                    onFocus={() => setShowPerson2Dropdown(true)}
+                    required
+                  />
+                  {showPerson2Dropdown && (
+                    <div 
+                      style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        backgroundColor: 'white',
+                        border: '1px solid #ced4da',
+                        borderRadius: '0.375rem',
+                        maxHeight: '200px',
+                        overflowY: 'auto',
+                        zIndex: 1000,
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                      }}
+                    >
+                      {getFilteredMembers(person2Search, person1Id).map((member) => (
+                        <div
+                          key={member.id}
+                          style={{
+                            padding: '8px 12px',
+                            cursor: 'pointer',
+                            borderBottom: '1px solid #f8f9fa',
+                            backgroundColor: person2Id === member.id ? '#e9ecef' : 'white'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#f8f9fa';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = person2Id === member.id ? '#e9ecef' : 'white';
+                          }}
+                          onClick={() => {
+                            setPerson2Id(member.id);
+                            setPerson2Search(`${member.first_name} ${member.last_name}`);
+                            setShowPerson2Dropdown(false);
+                          }}
+                        >
+                          {member.first_name} {member.last_name}
+                        </div>
+                      ))}
+                      {getFilteredMembers(person2Search, person1Id).length === 0 && (
+                        <div style={{ padding: '8px 12px', color: '#6c757d', fontStyle: 'italic' }}>
+                          No members found
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {person2Id && (
+                    <div style={{ marginTop: '4px', fontSize: '12px', color: '#6c757d' }}>
+                      Selected: {getMemberDisplayName(person2Id)}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="mb-3" style={{ marginBottom: '10px' }}>
@@ -569,10 +734,10 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
                   required
                 >
                   <option value="">Select type</option>
-                  <option value="parent">Parent</option>
-                  <option value="child">Child</option>
-                  <option value="spouse">Spouse</option>
-                  <option value="sibling">Sibling</option>
+                  <option value="parent">Parent (person 1 is parent of person 2)</option>
+                  <option value="child">Child (person 1 is child of person 2)</option>
+                  <option value="spouse">Spouse (person 1 and person 2 are spouses)</option>
+                  <option value="sibling">Sibling (person 1 and person 2 are siblings)</option>
                 </select>
               </div>
             </>
