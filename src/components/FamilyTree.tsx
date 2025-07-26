@@ -15,6 +15,7 @@ interface FamilyTreeProps {
   onEditMember: (member: FamilyMember) => void;
   onCloseTreeView?: () => void; // Optional close handler
   onClosePopup?: () => void; // Callback to close popup
+  firstMember?: FamilyMember | null; // Track the first member created
 }
 
 interface TreeNode {
@@ -43,7 +44,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   onAddExistingRelationship,
   onEditMember,
   onCloseTreeView,
-  onClosePopup
+  onClosePopup,
+  firstMember
 }) => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -779,12 +781,57 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     const fitZoom = Math.max(0.8, Math.min(zoomX, zoomY, 1.0)); // Min zoom 0.8, max 1.0
 
     setZoom(fitZoom);
-    // Center the tree
-    setPan({
-      x: (screenW / 2) - ((minX + maxX) / 2) * fitZoom,
-      y: (screenH / 2) - ((minY + maxY) / 2) * fitZoom
-    });
-  }, [treeNodes]);
+    
+    // If we have a first member, center on them; otherwise center the entire tree
+    if (firstMember) {
+      const firstMemberNode = treeNodes.find(n => n.member.id === firstMember.id);
+      if (firstMemberNode) {
+        // Center on the first member
+        setPan({
+          x: (screenW / 2) - firstMemberNode.x * fitZoom,
+          y: (screenH / 2) - firstMemberNode.y * fitZoom
+        });
+      } else {
+        // Fallback to centering the entire tree
+        setPan({
+          x: (screenW / 2) - ((minX + maxX) / 2) * fitZoom,
+          y: (screenH / 2) - ((minY + maxY) / 2) * fitZoom
+        });
+      }
+    } else {
+      // Center the tree
+      setPan({
+        x: (screenW / 2) - ((minX + maxX) / 2) * fitZoom,
+        y: (screenH / 2) - ((minY + maxY) / 2) * fitZoom
+      });
+    }
+  }, [treeNodes, firstMember]);
+
+  // Center on first member for desktop users on initial load
+  useEffect(() => {
+    if (window.innerWidth <= 768) return; // Only run on desktop
+    if (!svgRef.current || treeNodes.length === 0 || !firstMember) return;
+
+    const firstMemberNode = treeNodes.find(n => n.member.id === firstMember.id);
+    if (firstMemberNode) {
+      const container = document.querySelector('.family-tree-container') as HTMLElement;
+      if (container) {
+        const containerRect = container.getBoundingClientRect();
+        
+        // Center on the first member with a reasonable zoom level
+        const centerX = containerRect.width / 2;
+        const centerY = containerRect.height / 2;
+        
+        setPan({
+          x: centerX - firstMemberNode.x,
+          y: centerY - firstMemberNode.y
+        });
+        
+        // Set a reasonable initial zoom
+        setZoom(1.2);
+      }
+    }
+  }, [treeNodes, firstMember]);
 
   // Add/remove body class for mobile tree view
   useEffect(() => {
@@ -1079,6 +1126,31 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         >
           Reset View
         </button>
+        {firstMember && (
+          <button
+            onClick={() => {
+              const firstMemberNode = treeNodes.find(n => n.member.id === firstMember.id);
+              if (firstMemberNode) {
+                const container = document.querySelector('.family-tree-container') as HTMLElement;
+                if (container) {
+                  const containerRect = container.getBoundingClientRect();
+                  const centerX = containerRect.width / 2;
+                  const centerY = containerRect.height / 2;
+                  
+                  setPan({
+                    x: centerX - firstMemberNode.x,
+                    y: centerY - firstMemberNode.y
+                  });
+                  setZoom(1.2);
+                }
+              }
+            }}
+            className="control-button secondary"
+            title={`Center on ${firstMember.first_name} ${firstMember.last_name} (first member)`}
+          >
+            Center on First Member
+          </button>
+        )}
       </div>
 
       <svg
@@ -1118,7 +1190,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             <g 
               key={node.member.id} 
               transform={`translate(${node.x - CARD_WIDTH/2}, ${node.y - CARD_HEIGHT/2})`}
-              className={`member-card ${selectedMember?.id === node.member.id ? 'selected' : ''} ${node.isSpouse ? 'spouse-card' : ''}`}
+              className={`member-card ${selectedMember?.id === node.member.id ? 'selected' : ''} ${node.isSpouse ? 'spouse-card' : ''} ${firstMember?.id === node.member.id ? 'first-member' : ''}`}
               onClick={(e) => handleMemberClick(node.member, e)}
               style={{ 
                 cursor: 'pointer', 
@@ -1279,7 +1351,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             <g 
               key={node.member.id} 
               transform={`translate(${node.x - CARD_WIDTH/2}, ${node.y - CARD_HEIGHT/2})`}
-              className={`member-card ${selectedMember?.id === node.member.id ? 'selected' : ''}`}
+              className={`member-card ${selectedMember?.id === node.member.id ? 'selected' : ''} ${firstMember?.id === node.member.id ? 'first-member' : ''}`}
               onClick={(e) => handleMemberClick(node.member, e)}
               style={{ 
                 cursor: 'pointer', 
@@ -1429,6 +1501,31 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                   fill="#3B82F6"
                 />
               )}
+
+              {/* First member indicator */}
+              {firstMember?.id === node.member.id && (
+                <g>
+                  <circle
+                    cx={CARD_WIDTH - 15}
+                    cy={CARD_HEIGHT - 15}
+                    r="12"
+                    fill="#f59e0b"
+                    stroke="#ffffff"
+                    strokeWidth="2"
+                  />
+                  <text
+                    x={CARD_WIDTH - 15}
+                    y={CARD_HEIGHT - 10}
+                    textAnchor="middle"
+                    fill="white"
+                    fontSize="10"
+                    fontWeight="bold"
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    1st
+                  </text>
+                </g>
+              )}
             </g>
           ))}
         </g>
@@ -1455,6 +1552,12 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           <div className="legend-line" style={{ backgroundColor: '#059669', height: '3px', width: '20px' }}></div>
           <span>Sibling</span>
         </div>
+        {firstMember && (
+          <div className="legend-item">
+            <div className="legend-line" style={{ backgroundColor: '#f59e0b', height: '3px', width: '20px' }}></div>
+            <span>First Member Created</span>
+          </div>
+        )}
       </div>
 
       {/* Member popup */}
