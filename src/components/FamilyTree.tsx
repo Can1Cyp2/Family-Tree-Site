@@ -13,7 +13,7 @@ interface FamilyTreeProps {
   onAddRelatedMember: (member: FamilyMember) => void;
   onAddExistingRelationship: (member: FamilyMember) => void;
   onEditMember: (member: FamilyMember) => void;
-  onCloseTreeView?: () => void; // Optional close handler
+  onCloseTreeView?: () => void; // close handler
   onClosePopup?: () => void; // Callback to close popup
   firstMember?: FamilyMember | null; // Track the first member created
 }
@@ -64,11 +64,11 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   const CARD_WIDTH = 180;
   const CARD_HEIGHT = 120;
   const HORIZONTAL_SPACING = 280; // Increased space between siblings
-  const VERTICAL_SPACING = 240; // Space between generations (increased)
+  const VERTICAL_SPACING = 240; // Space between generations
   const SPOUSE_SPACING = 220; // Space between spouses
   const FAMILY_GROUP_SPACING = 350; // Space between disconnected family groups
   const MIN_CHILD_SPACING = 250; // (legacy, not used for child layout)
-  const CHILD_GAP = 40; // New: gap between children to prevent overlap
+  const CHILD_GAP = 40; // gap between children to prevent overlap
 
   // Mini map constants
   const MINI_MAP_WIDTH = 200;
@@ -228,8 +228,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       members: group.map(n => `${n.member.first_name} (parents: ${n.parents.map(p => p.member.first_name).join(',')})`)
     })));
 
-    // --- PRESERVE EXISTING STRUCTURE TREE LAYOUT ---
-    let totalLayoutWidth = 100;
+    // --- STRUCTURE TREE LAYOUT ---
+    let totalLayoutWidth = 100; // Start with some initial padding
     
     // Helper to get a unique key for a set of parents
     const getParentsKey = (node: TreeNode) => node.parents.map(p => p.member.id).sort().join('-');
@@ -250,8 +250,54 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       const familyUnits: TreeNode[][] = [];
       const processed = new Set<string>();
       
-      nodes.forEach(node => {
+      // Sort nodes so blood relatives (those with parents/children/siblings) are processed first
+      const sortedNodes = [...nodes].sort((a, b) => {
+        const aHasBloodRelations = a.parents.length > 0 || a.children.length > 0 || a.siblings.length > 0;
+        const bHasBloodRelations = b.parents.length > 0 || b.children.length > 0 || b.siblings.length > 0;
+        
+        // Blood relatives first, then spouses
+        if (aHasBloodRelations && !bHasBloodRelations) return -1;
+        if (!aHasBloodRelations && bHasBloodRelations) return 1;
+        return 0;
+      });
+      
+
+      // Pure spouses (no blood relationships) should only be added via their blood relative spouses
+      sortedNodes.forEach(node => {
         if (processed.has(node.member.id)) return;
+        
+        const hasParentsOrSiblings = node.parents.length > 0 || node.siblings.length > 0;
+        
+        // Only skip if this person is clearly a spouse (not a family root)
+        if (!hasParentsOrSiblings && node.children.length > 0) {
+          // Check if they share children with someone who has MORE blood relationships
+          let shouldSkipAsSpouse = false;
+          
+          node.spouses.forEach(spouse => {
+            const spouseBloodRelationCount = spouse.parents.length + spouse.children.length + spouse.siblings.length;
+            const nodeBloodRelationCount = node.parents.length + node.children.length + node.siblings.length;
+            
+            // Check if they share children
+            const hasSharedChildren = node.children.some(child => 
+              spouse.children.some(spouseChild => spouseChild.member.id === child.member.id)
+            );
+            
+            // Only treat as spouse if:
+            // 1. They share children AND
+            // 2. The spouse has MORE blood relationships (indicating they're the "main" family line)
+            if (hasSharedChildren && spouseBloodRelationCount > nodeBloodRelationCount) {
+              shouldSkipAsSpouse = true;
+              console.log(`Skipping ${node.member.first_name} as spouse of ${spouse.member.first_name} (shared children, fewer blood relations: ${nodeBloodRelationCount} vs ${spouseBloodRelationCount})`);
+            }
+          });
+          
+          if (shouldSkipAsSpouse) {
+            return; // Skip this person, they'll be added as a spouse later
+          }
+        }
+        
+        // If we get here, this person should be treated as a family root
+        console.log(`Processing ${node.member.first_name} as family root (parents/siblings: ${hasParentsOrSiblings}, children: ${node.children.length})`);
         
         // Start a new family unit with this node
         const familyUnit: TreeNode[] = [node];
@@ -272,39 +318,44 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             if (!processed.has(spouse.member.id) && !familyUnit.some(m => m.member.id === spouse.member.id)) {
               console.log(`Checking spouse ${spouse.member.first_name} of ${member.member.first_name}`);
               
-
-              
-              // Check if this person has ANY blood relationships (parent/child/sibling) with ANYONE in the family unit
-              const hasBloodRelationship = familyUnit.some(familyMember => {
-                const hasParentChild = familyMember.children.some(child => child.member.id === spouse.member.id) ||
-                  familyMember.parents.some(parent => parent.member.id === spouse.member.id) ||
-                  spouse.children.some(child => child.member.id === familyMember.member.id) ||
-                  spouse.parents.some(parent => parent.member.id === familyMember.member.id);
+              // Check if this person has ANY blood relationships (parent/child/sibling) with ANYONE
+              // need to check against ALL family members, not just the current family unit
+              const hasBloodRelationshipWithAnyone = familyMembers.some(otherMember => {
+                if (otherMember.id === spouse.member.id) return false; // Don't compare with self
                 
-                const hasSibling = familyMember.siblings.some(sibling => sibling.member.id === spouse.member.id) ||
-                  spouse.siblings.some(sibling => sibling.member.id === familyMember.member.id);
+                const spouseRelations = relationshipMap.get(spouse.member.id);
+                if (!spouseRelations) return false;
                 
-                if (hasParentChild || hasSibling) {
-                  console.log(`${spouse.member.first_name} has blood relationship with ${familyMember.member.first_name}: parentChild=${hasParentChild}, sibling=${hasSibling}`);
-                }
+                // Check if spouse has parent/child/sibling relationship with this other member
+                const hasParentChild = spouseRelations.parents.some(p => p.member.id === otherMember.id) ||
+                  spouseRelations.children.some(c => c.member.id === otherMember.id);
+                
+                const hasSibling = spouseRelations.siblings.some(s => s.member.id === otherMember.id);
                 
                 return hasParentChild || hasSibling;
               });
               
-              // Check if they share children (indicating they're spouses regardless of blood relationship)
+              // Check if they share children with the current family member (indicating they're spouses)
               const hasSharedChildren = member.children.some(child => 
                 spouse.children.some(spouseChild => spouseChild.member.id === child.member.id)
               );
               
-              if (!hasBloodRelationship || hasSharedChildren) {
-                // Mark as spouse if they have NO blood relationships OR if they share children
+              // Only mark someone as a spouse if they have fewer blood relationships than the current member
+              const memberBloodRelationCount = member.parents.length + member.children.length + member.siblings.length;
+              const spouseBloodRelationCount = spouse.parents.length + spouse.children.length + spouse.siblings.length;
+              
+              console.log(`Comparing ${member.member.first_name} (blood relations: ${memberBloodRelationCount}) with ${spouse.member.first_name} (blood relations: ${spouseBloodRelationCount})`);
+              
+              if (!hasBloodRelationshipWithAnyone || 
+                  (hasSharedChildren && spouseBloodRelationCount < memberBloodRelationCount)) {
+                // This person has no blood relationships OR they have fewer blood relationships and share children
                 spouse.isSpouse = true;
                 spouse.spouseOf = member;
                 spousesToAdd.push(spouse);
                 processed.add(spouse.member.id);
-                console.log(`${spouse.member.first_name} marked as spouse of ${member.member.first_name} (shared children: ${hasSharedChildren})`);
+                console.log(`${spouse.member.first_name} marked as spouse of ${member.member.first_name} (no blood relationships: ${!hasBloodRelationshipWithAnyone}, shared children: ${hasSharedChildren})`);
               } else {
-                // This is a blood relative with no shared children - add them to the family unit as a blood relative
+                // This is a blood relative with equal or more blood relationships: add them to the family unit as a blood relative
                 console.log(`${spouse.member.first_name} is a blood relative, adding to family unit`);
                 familyUnit.push(spouse);
                 processed.add(spouse.member.id);
@@ -314,7 +365,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         });
         familyUnit.push(...spousesToAdd);
         
-        // Sort the family unit: prioritize spouses with shared children, then by family structure
         familyUnit.sort((a, b) => {
           // First, check if they share children (are spouses)
           const aChildren = a.children.map(c => c.member.id);
@@ -323,14 +373,13 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           
           if (sharedChildren.length > 0) {
             // They are spouses with shared children
-            // Calculate individual subtree weights (excluding shared children)
             const calculateIndividualWeight = (node: TreeNode, sharedChildIds: string[]): number => {
               if (node.children.length === 0) return 0;
               
               let weight = 0;
               node.children.forEach(child => {
                 if (!sharedChildIds.includes(child.member.id)) {
-                  weight += 1; // Count individual children
+                  weight += 1;
                   weight += calculateIndividualWeight(child, sharedChildIds);
                 }
               });
@@ -340,30 +389,25 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             const aIndividualWeight = calculateIndividualWeight(a, sharedChildren);
             const bIndividualWeight = calculateIndividualWeight(b, sharedChildren);
             
-            // Position the person with more individual children/descendants on the right
             if (aIndividualWeight !== bIndividualWeight) {
-              return aIndividualWeight - bIndividualWeight; // More individual children on the right
+              return aIndividualWeight - bIndividualWeight;
             } else {
-              // If equal individual weight, position by birth date (earlier on left)
               const aDate = a.member.birth_date || '1900-01-01';
               const bDate = b.member.birth_date || '1900-01-01';
               return aDate.localeCompare(bDate);
             }
           }
           
-          // If they don't share children, check if they're siblings
+          // Check if they're siblings
           const aParents = a.parents.map(p => p.member.id).sort().join('-');
           const bParents = b.parents.map(p => p.member.id).sort().join('-');
           const aIsSibling = aParents === bParents && aParents !== '';
           const bIsSibling = aParents === bParents && aParents !== '';
           
-          // If one is sibling and other is spouse, sibling comes first
           if (aIsSibling && !bIsSibling) return -1;
           if (!aIsSibling && bIsSibling) return 1;
           
-          // If both are siblings, sort by family structure (children first, then birth date)
           if (aIsSibling && bIsSibling) {
-            // Calculate the "weight" of each sibling based on their children and descendants
             const calculateSubtreeWeight = (node: TreeNode): number => {
               if (node.children.length === 0) return 0;
               
@@ -377,34 +421,27 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             const aWeight = calculateSubtreeWeight(a);
             const bWeight = calculateSubtreeWeight(b);
             
-            // Position the person with more children/descendants on the right
             if (aWeight !== bWeight) {
-              return aWeight - bWeight; // More children on the right
+              return aWeight - bWeight;
             }
             
-            // If equal family size, sort by birth date (earlier on left)
             const aDate = a.member.birth_date || '1900-01-01';
             const bDate = b.member.birth_date || '1900-01-01';
             return aDate.localeCompare(bDate);
           }
           
-          // If both are spouses, consider their children's positions
           if (!aIsSibling && !bIsSibling) {
-            // Check if they have shared children
             const aChildren = a.children.map(c => c.member.id);
             const bChildren = b.children.map(c => c.member.id);
             const sharedChildren = aChildren.filter(id => bChildren.includes(id));
             
             if (sharedChildren.length > 0) {
-              // They have shared children, so they're a couple
-              // Position the person with earlier birth date on the left
               const aDate = a.member.birth_date || '1900-01-01';
               const bDate = b.member.birth_date || '1900-01-01';
-              return aDate.localeCompare(bDate); // Earlier birth date on left
+              return aDate.localeCompare(bDate);
             }
           }
           
-          // For any remaining cases, sort by birth date to ensure consistent ordering
           const aDate = a.member.birth_date || '1900-01-01';
           const bDate = b.member.birth_date || '1900-01-01';
           return aDate.localeCompare(bDate);
@@ -413,7 +450,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         familyUnits.push(familyUnit);
       });
       
-      // Debug: Log the family units to see what's happening
       console.log('Family units created:', familyUnits.map(unit => 
         unit.map(member => `${member.member.first_name} (isSpouse: ${member.isSpouse}, spouseOf: ${member.spouseOf?.member.first_name || 'none'}, children: ${member.children.map(c => c.member.first_name).join(',')})`)
       ));
@@ -516,18 +552,22 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           }
         }
         
+        // Account for spouses of siblings in spacing calculation
+        const thisHasSpouse = thisSib.spouses.length > 0;
+        const nextHasSpouse = nextSib.spouses.length > 0;
+        
+        if (thisHasSpouse || nextHasSpouse) {
+          spacingGap += SPOUSE_SPACING / 2; // Add extra space when spouses are involved
+        }
+        
         totalSpacingNeeded += spacingGap;
       }
       
-      // Calculate total width needed including extra spacing
+      // Calculate total width including spouses
       const totalBloodRelativeWidth = bloodRelativeWidths.reduce((sum, width) => sum + width, 0) + totalSpacingNeeded;
       
-      // Add space for spouses on the left
-      const spouseSpace = spouses.length * 100; // Space for spouses
-      const totalWidth = totalBloodRelativeWidth + spouseSpace;
-      
-      // Start positioning from the left, accounting for spouse space
-      currentX = xOffset + spouseSpace;
+      // MIGHT CHANGE LATER: Don't add arbitrary spouse space:  spouses position relative to their blood relatives
+      const totalWidth = totalBloodRelativeWidth;
       
       // Layout blood relatives
       bloodRelatives.forEach((sib, idx) => {
@@ -574,6 +614,14 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             }
           }
           
+          // Account for spouses in spacing
+          const thisHasSpouse = sib.spouses.length > 0;
+          const nextHasSpouse = nextSib.spouses.length > 0;
+          
+          if (thisHasSpouse || nextHasSpouse) {
+            spacingGap += SPOUSE_SPACING / 2; // Add extra space when spouses are involved
+          }
+          
           currentX += sibSubtreeWidth + spacingGap;
         } else {
           currentX += sibSubtreeWidth;
@@ -584,22 +632,21 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         centers.push(sibCenter);
       });
       
-              // Position spouses to the left of their blood relatives, avoiding conflicts
-        spouses.forEach((spouse, idx) => {
-          if (spouse.spouseOf) {
-            // Position spouse behind and to the left of their blood relative with proper spacing
-            const spouseX = spouse.spouseOf.x - 150 - (idx * 30); // More space and stagger multiple spouses
-            spouse.x = spouseX;
-            spouse.y = spouse.spouseOf.y; // Same y position (behind)
-          }
-        });
+      // Position spouses to the left of their blood relatives, avoiding conflicts
+      spouses.forEach((spouse, idx) => {
+        if (spouse.spouseOf) {
+          // Position spouse behind and to the left of their blood relative with proper spacing
+          const spouseX = spouse.spouseOf.x - 150 - (idx * 30); // More space and stagger multiple spouses
+          spouse.x = spouseX;
+          spouse.y = spouse.spouseOf.y; // Same y position (behind)
+        }
+      });
       
       return { width: totalWidth, centers };
     };
     
-    // Main layout for each family group - PRESERVE EXISTING STRUCTURE
+    // Main layout for each family group
     familyGroups.forEach((group, groupIndex) => {
-      // ORIGINAL CODE - Don't change this part
       const groupSet = new Set(group.map(n => n.member.id));
       
       // Find nodes with no parents in this group (potential roots)
@@ -607,7 +654,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         n.parents.filter(p => groupSet.has(p.member.id)).length === 0
       );
       
-      // Find nodes with the most descendants (likely to be the "main" family line)
+      // Find nodes with the most descendants
       const calculateDescendantCount = (node: TreeNode): number => {
         let count = node.children.length;
         node.children.forEach(child => {
@@ -762,8 +809,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       
       totalLayoutWidth += groupWidth;
     });
-    // --- END PRESERVE EXISTING STRUCTURE TREE LAYOUT --
-
+    // --- STRUCTURE TREE LAYOUT --
+    
     return Array.from(nodeMap.values());
   }, [familyMembers, relationships, relationshipMap]);
 
@@ -859,8 +906,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         if (firstMemberNode) {
           // Center on the first member
           setPan({
-            x: (screenW / 2) - firstMemberNode.x * fitZoom,
-            y: (screenH / 2) - firstMemberNode.y * fitZoom
+            x: (screenW / 2) - firstMemberNode.x,
+            y: (screenH / 2) - firstMemberNode.y
           });
         } else {
           // Fallback to centering the entire tree
@@ -890,7 +937,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         const containerRect = container.getBoundingClientRect();
         
         // Center on the first member with a reasonable zoom level
-        const centerX = containerRect.width / 2;
+        const centerX = containerRect.width / 2.5;  // added .5 to the divide to account for spacing taken up by member card and such
         const centerY = containerRect.height / 2;
         
         setPan({
@@ -950,10 +997,10 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     // Only handle touch events on the SVG background, not on member cards
     if (target === svgRef.current || target.tagName === 'svg') {
       if (e.touches.length === 1) {
-        // Single touch - start panning
+        // Single touch: start panning
         setIsDragging(true);
         setDragStart({ 
-          x: e.touches[0].clientX - pan.x, 
+          x: e.touches[0].clientX - pan.x,  
           y: e.touches[0].clientY - pan.y 
         });
       }
@@ -994,7 +1041,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     const isMobile = window.innerWidth <= 768;
     
     if (isMobile) {
-      // On mobile, always center the popup - don't set position, let CSS handle it
+      // On mobile, always center the popup: don't set position, let CSS handle it
       setShowMemberPopup(member);
       onSelectMember(member);
       return;
