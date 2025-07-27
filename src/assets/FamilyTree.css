@@ -107,6 +107,7 @@
 .spouse-card:hover {
   opacity: 1;
   z-index: 10 !important;
+  
   /* highline the card: transform was not working */
   stroke-width: 3 !important;
   filter: drop-shadow(0 0 12px rgba(99, 102, 241, 0.6));
