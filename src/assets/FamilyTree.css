@@ -4,7 +4,7 @@
   margin: 0 auto;
   position: relative;
   background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-  overflow: hidden; /* Hide scrollbars and prevent scrolling on desktop */
+  overflow: visible; /* Allow mini map to be visible */
   /* Hide scrollbars for all browsers */
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none;  /* IE 10+ */
