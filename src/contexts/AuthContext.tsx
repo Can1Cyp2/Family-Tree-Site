@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../supabaseClient';
 
@@ -76,14 +76,50 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      await supabase.auth.signOut();
     } catch (error) {
-      throw error;
+      console.error('Error signing out:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    let inactivityTimer: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        if (user) {
+          signOut();
+        }
+      }, 5 * 60 * 1000); // 5 minutes
+    };
+
+    const activityEvents = [
+      'mousemove',
+      'mousedown',
+      'keypress',
+      'touchstart',
+      'scroll',
+    ];
+
+    const resetTimerOnActivity = () => resetTimer();
+
+    if (user) {
+      activityEvents.forEach((event) => {
+        window.addEventListener(event, resetTimerOnActivity);
+      });
+      resetTimer();
+    }
+
+    return () => {
+      clearTimeout(inactivityTimer);
+      activityEvents.forEach((event) => {
+        window.removeEventListener(event, resetTimerOnActivity);
+      });
+    };
+  }, [user, signOut]);
 
   const value = {
     user,
