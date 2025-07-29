@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import './App.css';
 import { useAuth } from './contexts/AuthContext';
@@ -15,6 +15,10 @@ function App() {
   const [showHoverGif, setShowHoverGif] = useState(false);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isHoveringRef = useRef(false);
+
+  useEffect(() => {
+    signOut();
+  }, [signOut]);
 
   const handleMouseEnter = () => {
     console.log('Mouse entered logo area, isHovering:', isHoveringRef.current);
