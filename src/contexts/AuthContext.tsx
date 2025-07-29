@@ -92,8 +92,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       inactivityTimer = setTimeout(() => {
         if (user) {
           signOut();
-        }
-      }, 5 * 60 * 1000); // 5 minutes
+        } //sign out after 1 day:
+      }, 86400000); // 1 day
     };
 
     const activityEvents = [
