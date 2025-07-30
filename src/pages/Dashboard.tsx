@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import FamilyTree from '../components/FamilyTree';
+import FamilyTreeModal from '../components/FamilyTreeModal'; // Import the modal
 import AddFamilyMemberForm from '../components/AddFamilyMemberForm';
 import AddRelationForm from '../components/AddRelationForm';
 import EditMemberForm from '../components/EditMemberForm';
@@ -20,6 +21,7 @@ const Dashboard: React.FC = () => {
   const [showEditMemberForm, setShowEditMemberForm] = useState(false);
   const [memberToEdit, setMemberToEdit] = useState<FamilyMember | null>(null);
   const [selectedFamilyMember, setSelectedFamilyMember] = useState<FamilyMember | null>(null);
+  const [isFamilyTreeFullscreen, setIsFamilyTreeFullscreen] = useState(false);
 
   // Get the first member created (member with earliest created_at timestamp)
   const firstMember = familyMembers.length > 0 ? familyMembers[0] : null;
@@ -186,6 +188,13 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  // Handle closing fullscreen modal
+  const handleCloseFullscreen = () => {
+    setIsFamilyTreeFullscreen(false);
+    // Optionally clear selection when exiting fullscreen
+    // setSelectedFamilyMember(null);
+  };
+
   if (loading) {
     return (
       <div className="container">
@@ -196,12 +205,37 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="container">
-      {/* RED BOX TEST - Moved to top */}
+      {/* Fullscreen Modal */}
+      {isFamilyTreeFullscreen && (
+        <FamilyTreeModal
+          familyMembers={familyMembers}
+          relationships={relationships}
+          onDeleteMember={handleDeleteMember}
+          onSelectMember={setSelectedFamilyMember}
+          selectedMember={selectedFamilyMember}
+          onDeleteRelationship={handleDeleteRelationship}
+          onAddMember={() => setShowAddMemberForm(true)}
+          onAddRelatedMember={(member) => {
+            setSelectedFamilyMember(member);
+            setShowAddRelationFormMode('add_new_related');
+          }}
+          onAddExistingRelationship={(member) => {
+            setSelectedFamilyMember(member);
+            setShowAddRelationFormMode('add_existing_relation');
+          }}
+          onEditMember={handleEditMember}
+          onClose={handleCloseFullscreen}
+          firstMember={firstMember}
+          isFullscreen={true}
+        />
+      )}
+
+      {/* Add Relation Form Modal */}
       {showAddRelationFormMode !== 'none' && (
         <div 
           style={{
             position: 'fixed',
-            top: '80px', // Start below the navbar
+            top: '80px',
             left: 0,
             right: 0,
             bottom: 0,
@@ -210,7 +244,7 @@ const Dashboard: React.FC = () => {
             justifyContent: 'center',
             alignItems: 'flex-start',
             paddingTop: '20px',
-            zIndex: 1000
+            zIndex: 1001 // Higher than fullscreen modal
           }}
           onClick={() => setShowAddRelationFormMode('none')}
         >
@@ -274,12 +308,19 @@ const Dashboard: React.FC = () => {
           <button
             onClick={() => {
               setShowAddMemberForm(true);
-              setSelectedFamilyMember(null); // Ensure no member is selected when adding a new one
+              setSelectedFamilyMember(null);
             }}
             className="btn btn-primary"
             style={{ marginRight: '10px' }}
           >
             Add New Family Member
+          </button>
+          <button
+            onClick={() => setIsFamilyTreeFullscreen(true)}
+            className="btn btn-secondary"
+            style={{ marginRight: '10px' }}
+          >
+            Fullscreen Tree
           </button>
 
           {selectedFamilyMember && (
@@ -324,26 +365,26 @@ const Dashboard: React.FC = () => {
             </button>
           </div>
         ) : (
-            <FamilyTree
-              familyMembers={familyMembers}
-              relationships={relationships}
-              onDeleteMember={handleDeleteMember}
-              onSelectMember={setSelectedFamilyMember}
-              selectedMember={selectedFamilyMember}
-              onDeleteRelationship={handleDeleteRelationship}
-              onAddMember={() => setShowAddMemberForm(true)}
-              onAddRelatedMember={(member) => {
-                setSelectedFamilyMember(member);
-                setShowAddRelationFormMode('add_new_related');
-              }}
-              onAddExistingRelationship={(member) => {
-                setSelectedFamilyMember(member);
-                setShowAddRelationFormMode('add_existing_relation');
-              }}
-              onEditMember={handleEditMember}
-              onClosePopup={() => setSelectedFamilyMember(null)}
-              firstMember={firstMember}
-            />
+          <FamilyTree
+            familyMembers={familyMembers}
+            relationships={relationships}
+            onDeleteMember={handleDeleteMember}
+            onSelectMember={setSelectedFamilyMember}
+            selectedMember={selectedFamilyMember}
+            onDeleteRelationship={handleDeleteRelationship}
+            onAddMember={() => setShowAddMemberForm(true)}
+            onAddRelatedMember={(member) => {
+              setSelectedFamilyMember(member);
+              setShowAddRelationFormMode('add_new_related');
+            }}
+            onAddExistingRelationship={(member) => {
+              setSelectedFamilyMember(member);
+              setShowAddRelationFormMode('add_existing_relation');
+            }}
+            onEditMember={handleEditMember}
+            onClosePopup={() => setSelectedFamilyMember(null)}
+            firstMember={firstMember}
+          />
         )}
 
         {familyMembers.length > 0 && (
@@ -375,12 +416,12 @@ const Dashboard: React.FC = () => {
                     >
                       Edit
                     </button>
-                  <button
-                    onClick={() => handleDeleteMember(member.id)}
-                    className="btn btn-danger"
-                  >
-                    Delete
-                  </button>
+                    <button
+                      onClick={() => handleDeleteMember(member.id)}
+                      className="btn btn-danger"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
               ))}
@@ -388,25 +429,12 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Simple always-visible test */}
-        <div style={{
-          background: 'orange',
-          color: 'black',
-          padding: '15px',
-          margin: '15px 0',
-          border: '3px solid black',
-          fontSize: '16px',
-          fontWeight: 'bold'
-        }}>
-          🧪 ALWAYS VISIBLE TEST - This should always be visible 🧪
-        </div>
-
-        {/* Forms */}
+        {/* Add Member Form Modal */}
         {showAddMemberForm && (
           <div 
             style={{
               position: 'fixed',
-              top: '80px', // Start below the navbar
+              top: '80px',
               left: 0,
               right: 0,
               bottom: 0,
@@ -415,7 +443,7 @@ const Dashboard: React.FC = () => {
               justifyContent: 'center',
               alignItems: 'flex-start',
               paddingTop: '20px',
-              zIndex: 1000
+              zIndex: 1001 // Higher than fullscreen modal
             }}
             onClick={() => setShowAddMemberForm(false)}
           >
@@ -458,145 +486,73 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* MINIMAL TEST - Replace complex form with simple test */}
-        {/*
-        {showAddRelationFormMode !== 'none' && (
-          <div style={{
-            background: 'red',
-            color: 'white',
-            padding: '50px',
-            margin: '20px 0',
-            border: '10px solid yellow',
-            fontSize: '24px',
-            fontWeight: 'bold',
-            textAlign: 'center'
-          }}>
-            🚨 FORM SHOULD BE VISIBLE - MODE: {showAddRelationFormMode} 🚨
-            <br />
-            <button 
+        {/* Edit Member Form Modal */}
+        {showEditMemberForm && memberToEdit && (
+          <div 
+            style={{
+              position: 'fixed',
+              top: '80px',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'flex-start',
+              paddingTop: '20px',
+              zIndex: 1001 // Higher than fullscreen modal
+            }}
+            onClick={() => {
+              setShowEditMemberForm(false);
+              setMemberToEdit(null);
+            }}
+          >
+            <div 
               style={{
                 background: 'white',
-                color: 'red',
-                padding: '10px 20px',
-                border: 'none',
-                borderRadius: '5px',
-                fontSize: '16px',
-                marginTop: '20px',
-                cursor: 'pointer'
+                color: 'black',
+                padding: '20px',
+                border: '2px solid orange',
+                borderRadius: '8px',
+                maxWidth: '500px',
+                width: '90%',
+                maxHeight: 'calc(80vh - 100px)',
+                overflowY: 'auto',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
               }}
-              onClick={() => {
-                console.log('Close button clicked');
-                setShowAddRelationFormMode('none');
-              }}
+              onClick={(e) => e.stopPropagation()}
             >
-              CLOSE THIS TEST
-            </button>
-          </div>
-        )}
-        */}
-
-        {/* Original complex form - commented out for now */}
-        {/*
-        {showAddRelationFormMode !== 'none' && (
-          <div style={{ 
-            border: '3px solid blue', 
-            padding: '10px', 
-            margin: '10px 0',
-            background: '#d1ecf1'
-          }}>
-            <h3 style={{ color: 'blue' }}>ADD RELATION FORM IS RENDERED - Mode: {showAddRelationFormMode}</h3>
-            <div style={{
-              background: 'lime',
-              color: 'black',
-              padding: '20px',
-              margin: '10px 0',
-              border: '5px solid black',
-              fontSize: '20px',
-              fontWeight: 'bold'
-            }}>
-              🎯 FORM CONTAINER IS VISIBLE - MODE: {showAddRelationFormMode} 🎯
-            </div>
-            
-            <div style={{
-              background: 'white',
-              border: '2px solid purple',
-              padding: '20px',
-              margin: '10px 0',
-              borderRadius: '8px'
-            }}>
-              <h4 style={{ color: 'purple', margin: '0 0 15px 0' }}>SIMPLE TEST FORM</h4>
-              <p style={{ margin: '10px 0' }}>This is a test form to see if forms are visible at all.</p>
-              <input 
-                type="text" 
-                placeholder="Test input field" 
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px',
-                  margin: '10px 0'
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                <h3 style={{ color: 'orange', margin: 0, fontSize: '18px' }}>Edit Family Member</h3>
+                <button 
+                  onClick={() => {
+                    setShowEditMemberForm(false);
+                    setMemberToEdit(null);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    fontSize: '20px',
+                    cursor: 'pointer',
+                    color: '#666',
+                    padding: '5px'
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <EditMemberForm
+                member={memberToEdit}
+                onMemberUpdated={handleMemberUpdated}
+                onCancel={() => {
+                  setShowEditMemberForm(false);
+                  setMemberToEdit(null);
                 }}
               />
-              <button 
-                style={{
-                  background: 'purple',
-                  color: 'white',
-                  padding: '10px 20px',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  margin: '10px 5px 10px 0'
-                }}
-                onClick={() => console.log('Test button clicked')}
-              >
-                Test Button
-              </button>
-              <button 
-                style={{
-                  background: 'gray',
-                  color: 'white',
-                  padding: '10px 20px',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
-                onClick={() => setShowAddRelationFormMode('none')}
-              >
-                Close Test
-              </button>
             </div>
-            
-            <AddRelationForm
-              mode={showAddRelationFormMode}
-              selectedFamilyMember={selectedFamilyMember}
-              familyMembers={familyMembers}
-              existingRelationships={relationships}
-              onRelationAdded={handleRelationAdded}
-              onCancel={() => setShowAddRelationFormMode('none')}
-            />
           </div>
         )}
-        */}
-
-        {showEditMemberForm && memberToEdit && (
-          <div style={{ 
-            border: '3px solid green', 
-            padding: '10px', 
-            margin: '10px 0',
-            background: '#d4edda'
-          }}>
-            <h3 style={{ color: 'green' }}>EDIT MEMBER FORM IS RENDERED</h3>
-            <EditMemberForm
-              member={memberToEdit}
-              onMemberUpdated={handleMemberUpdated}
-              onCancel={() => {
-                setShowEditMemberForm(false);
-                setMemberToEdit(null);
-              }}
-            />
-          </div>
-        )}
-        </div>
+      </div>
     </div>
   );
 };

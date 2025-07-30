@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
 import * as d3 from 'd3';
 import { FamilyMember, Relationship } from '../types';
 import '../assets/FamilyTree.css';
@@ -19,12 +19,18 @@ interface D3Node {
   parent?: D3Node;
 }
 
-const D3FamilyTree: React.FC<D3FamilyTreeProps> = ({
+export interface D3FamilyTreeRef {
+  panBy: (dx: number, dy: number) => void;
+  zoomBy: (k: number) => void;
+  centerView: () => void;
+}
+
+const D3FamilyTree = forwardRef<D3FamilyTreeRef, D3FamilyTreeProps>(({
   familyMembers,
   relationships,
   onSelectMember,
   selectedMember
-}) => {
+}, ref) => {
   const svgRef = useRef<SVGSVGElement>(null);
 
   // Build D3 hierarchical data structure
@@ -118,6 +124,32 @@ const D3FamilyTree: React.FC<D3FamilyTreeProps> = ({
     return roots.length > 0 ? roots[0] : Array.from(coupleNodeMap.values())[0];
   }, [familyMembers, relationships]);
 
+  // Store references to zoomBehavior, svg, and initialTransform for imperative handle
+  const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const svgD3Ref = useRef<d3.Selection<SVGSVGElement, unknown, null, undefined> | null>(null);
+  const initialTransformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity.translate(50, 50).scale(1));
+
+  useImperativeHandle(ref, () => ({
+    panBy: (dx: number, dy: number) => {
+      if (svgD3Ref.current && zoomBehaviorRef.current) {
+        svgD3Ref.current.transition().duration(200).call((zoomBehaviorRef.current as any).translateBy, dx, dy);
+      }
+    },
+    zoomBy: (k: number) => {
+      if (svgD3Ref.current && zoomBehaviorRef.current) {
+        const width = 800;
+        const height = 600;
+        const [centerX, centerY] = [width / 2, height / 2];
+        svgD3Ref.current.transition().duration(200).call((zoomBehaviorRef.current as any).scaleBy, k, [centerX, centerY]);
+      }
+    },
+    centerView: () => {
+      if (svgD3Ref.current && zoomBehaviorRef.current) {
+        svgD3Ref.current.transition().duration(750).call((zoomBehaviorRef.current as any).transform, initialTransformRef.current);
+      }
+    }
+  }));
+
   useEffect(() => {
     if (!svgRef.current || !treeData) return;
 
@@ -125,6 +157,7 @@ const D3FamilyTree: React.FC<D3FamilyTreeProps> = ({
     d3.select(svgRef.current).selectAll("*").remove();
 
     const svg = d3.select(svgRef.current);
+    svgD3Ref.current = svg;
     const width = 800;
     const height = 600;
 
@@ -137,18 +170,26 @@ const D3FamilyTree: React.FC<D3FamilyTreeProps> = ({
     const root = d3.hierarchy(treeData);
     treeLayout(root);
 
-    // Set up zoom behavior
-    const zoom = d3.zoom()
+    const initialTransform = d3.zoomIdentity.translate(50, 50).scale(1);
+    initialTransformRef.current = initialTransform;
+    let currentZoom = d3.zoomIdentity;
+
+    const container = svg.append('g');
+
+    const zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.1, 3])
       .on('zoom', (event) => {
+        currentZoom = event.transform;
         container.attr('transform', event.transform);
       });
 
-    svg.call(zoom as any);
+    zoomBehaviorRef.current = zoomBehavior;
 
-    // Create a container for the tree
-    const container = svg.append('g')
-      .attr('transform', 'translate(50, 50)');
+    svg.call(zoomBehavior as any);
+
+    // Apply initial transform
+    svg.call(zoomBehavior.transform as any, initialTransform);
+    currentZoom = initialTransform;
 
     // Draw links between nodes
     const links = container.selectAll('.link')
@@ -248,6 +289,6 @@ const D3FamilyTree: React.FC<D3FamilyTreeProps> = ({
       />
     </div>
   );
-};
+});
 
 export default D3FamilyTree; 
