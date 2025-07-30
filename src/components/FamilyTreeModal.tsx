@@ -301,7 +301,7 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = ({
             firstMember={firstMember}
             externalPan={externalPan}
             externalZoom={externalZoom}
-            onCloseTreeView={onClose}
+            onClose={onClose}
             isFullscreen={isFullscreen}
           />
         </div>

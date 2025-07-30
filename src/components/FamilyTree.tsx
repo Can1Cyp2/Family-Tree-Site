@@ -13,13 +13,13 @@ interface FamilyTreeProps {
   onAddRelatedMember: (member: FamilyMember) => void;
   onAddExistingRelationship: (member: FamilyMember) => void;
   onEditMember: (member: FamilyMember) => void;
-  onCloseTreeView?: () => void; // close handler
   onClosePopup?: () => void; // Callback to close popup
   firstMember?: FamilyMember | null; // Track the first member created
   isPreview?: boolean; // New prop for preview mode
   externalPan?: { dx: number; dy: number } | null;
   externalZoom?: number | null;
   onFullscreen?: () => void; // Callback for fullscreen toggle
+  onClose?: () => void; // Callback for closing the tree view
   isFullscreen?: boolean; //  prop for fullscreen mode
 }
 
@@ -48,13 +48,13 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   onAddRelatedMember,
   onAddExistingRelationship,
   onEditMember,
-  onCloseTreeView,
   onClosePopup,
   firstMember,
   externalPan,
   externalZoom,
   isPreview = false, // Default to false
   onFullscreen,
+  onClose,
   isFullscreen = false, // prop for fullscreen mode
 }) => {
   const [zoom, setZoom] = useState(1);
@@ -1283,8 +1283,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         <button
           className="treeview-close-btn"
           onClick={() => {
-            if (onCloseTreeView) {
-              onCloseTreeView();
+            if (onClose) {
+              onClose();
             } else {
               // Fallback: reset view if no close handler provided
               setZoom(1);
@@ -1357,7 +1357,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
                 </svg>
-                Fullscreen {isFullscreen ? 'On' : 'Off'}
+                Fullscreen
               </button>
             </div>
           )}

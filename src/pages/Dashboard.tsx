@@ -384,7 +384,6 @@ const Dashboard: React.FC = () => {
             onEditMember={handleEditMember}
             onClosePopup={() => setSelectedFamilyMember(null)}
             firstMember={firstMember}
-            onCloseTreeView={() => setIsFamilyTreeFullscreen(true)}
             onFullscreen={() => setIsFamilyTreeFullscreen(true)}
             isFullscreen={false}
           />
