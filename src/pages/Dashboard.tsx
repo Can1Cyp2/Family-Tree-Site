@@ -315,13 +315,13 @@ const Dashboard: React.FC = () => {
           >
             Add New Family Member
           </button>
-          <button
+          {/* <button
             onClick={() => setIsFamilyTreeFullscreen(true)}
             className="btn btn-secondary"
             style={{ marginRight: '10px' }}
           >
             Fullscreen Tree
-          </button>
+          </button> */}
 
           {selectedFamilyMember && (
             <>
@@ -384,6 +384,9 @@ const Dashboard: React.FC = () => {
             onEditMember={handleEditMember}
             onClosePopup={() => setSelectedFamilyMember(null)}
             firstMember={firstMember}
+            onCloseTreeView={() => setIsFamilyTreeFullscreen(true)}
+            onFullscreen={() => setIsFamilyTreeFullscreen(true)}
+            isFullscreen={false}
           />
         )}
 

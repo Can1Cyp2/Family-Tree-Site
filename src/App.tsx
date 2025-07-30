@@ -16,9 +16,9 @@ function App() {
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isHoveringRef = useRef(false);
 
-  useEffect(() => {
-    signOut();
-  }, [signOut]);
+  // useEffect(() => {
+  //   signOut();
+  // }, [signOut]);
 
   const handleMouseEnter = () => {
     console.log('Mouse entered logo area, isHovering:', isHoveringRef.current);
