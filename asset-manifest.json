@@ -1,17 +1,17 @@
 {
   "files": {
-    "main.css": "/Family-Tree-Site/static/css/main.05a53663.css",
-    "main.js": "/Family-Tree-Site/static/js/main.9eeae601.js",
+    "main.css": "/Family-Tree-Site/static/css/main.9652cee4.css",
+    "main.js": "/Family-Tree-Site/static/js/main.e805aae6.js",
     "static/js/453.e8860168.chunk.js": "/Family-Tree-Site/static/js/453.e8860168.chunk.js",
     "static/media/logo.svg": "/Family-Tree-Site/static/media/logo.1792a55c7abdef39844e019664d48dc9.svg",
     "static/media/Binoopet.gif": "/Family-Tree-Site/static/media/Binoopet.e371f11945afd75b43f3.gif",
     "index.html": "/Family-Tree-Site/index.html",
-    "main.05a53663.css.map": "/Family-Tree-Site/static/css/main.05a53663.css.map",
-    "main.9eeae601.js.map": "/Family-Tree-Site/static/js/main.9eeae601.js.map",
+    "main.9652cee4.css.map": "/Family-Tree-Site/static/css/main.9652cee4.css.map",
+    "main.e805aae6.js.map": "/Family-Tree-Site/static/js/main.e805aae6.js.map",
     "453.e8860168.chunk.js.map": "/Family-Tree-Site/static/js/453.e8860168.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.05a53663.css",
-    "static/js/main.9eeae601.js"
+    "static/css/main.9652cee4.css",
+    "static/js/main.e805aae6.js"
   ]
 }
