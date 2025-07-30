@@ -19,18 +19,30 @@ interface FamilyTreeModalProps {
   isFullscreen?: boolean;
 }
 
-const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
+const FamilyTreeModal: React.FC<FamilyTreeModalProps> = ({
+  familyMembers,
+  relationships,
+  onDeleteMember,
+  onSelectMember,
+  selectedMember,
+  onDeleteRelationship,
+  onAddMember,
+  onAddRelatedMember,
+  onAddExistingRelationship,
+  onEditMember,
+  onClose,
+  firstMember,
+  isFullscreen = false
+}) => {
   const [externalPan, setExternalPan] = useState<{ dx: number; dy: number } | null>(null);
+  const [externalZoom, setExternalZoom] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  // Reduced from 200 to 50 for more controlled movement
-  const MOVE_AMOUNT = 10;
-  // Alternative: You can make it adaptive based on container size
-  // const MOVE_AMOUNT = containerRef.current ? Math.min(containerRef.current.clientWidth * 0.1, 100) : 50;
+  const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        props.onClose();
+        onClose();
       }
       // Add keyboard navigation - only if not focused on an input/button
       const activeElement = document.activeElement;
@@ -67,7 +79,7 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
       // Restore body scroll when modal closes
       document.body.style.overflow = 'unset';
     };
-  }, [props.onClose]);
+  }, [onClose]);
 
   const findFamilyTreeContainer = (): HTMLElement | null => {
     if (!containerRef.current) return null;
@@ -95,6 +107,15 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
     // Reset after a tick to avoid re-triggering
     setTimeout(() => {
       setExternalPan(null);
+    }, 50);
+  };
+
+  const triggerZoomEvent = (factor: number) => {
+    setExternalZoom(factor);
+    
+    // Reset after a tick to avoid re-triggering
+    setTimeout(() => {
+      setExternalZoom(null);
     }, 50);
   };
 
@@ -136,58 +157,26 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
   };
 
   const handleZoomIn = () => {
-    const treeContainer = findFamilyTreeContainer();
-    if (treeContainer) {
-      const buttons = Array.from(treeContainer.querySelectorAll('button'));
-      const zoomInButton = buttons.find(btn =>
-        btn.textContent?.includes('Zoom In')
-      );
-
-      if (zoomInButton) {
-        zoomInButton.click();
-        console.log('Clicked existing zoom in button');
-        return;
-      }
-    }
-
-    // Fallback: Try to trigger wheel event for zoom
-    const svg = treeContainer?.querySelector('svg') as SVGElement;
-    if (svg) {
-      const wheelEvent = new WheelEvent('wheel', {
-        deltaY: -100, // Negative for zoom in
-        bubbles: true,
-        cancelable: true
-      });
-      svg.dispatchEvent(wheelEvent);
-      console.log('Triggered synthetic wheel event for zoom in');
-    }
+    triggerZoomEvent(1.1); // Zoom in by 10%
+    console.log('Zoom in triggered');
   };
 
   const handleZoomOut = () => {
-    const treeContainer = findFamilyTreeContainer();
-    if (treeContainer) {
-      const buttons = Array.from(treeContainer.querySelectorAll('button'));
-      const zoomOutButton = buttons.find(btn =>
-        btn.textContent?.includes('Zoom Out')
-      );
+    triggerZoomEvent(0.9); // Zoom out by 10%
+    console.log('Zoom out triggered');
+  };
 
-      if (zoomOutButton) {
-        zoomOutButton.click();
-        console.log('Clicked existing zoom out button');
-        return;
-      }
-    }
+  const startHoldScroll = (direction: 'left' | 'right' | 'up' | 'down') => {
+    triggerPanEvent(direction); // Initial move
+    scrollIntervalRef.current = setInterval(() => {
+      triggerPanEvent(direction);
+    }, 100); // Adjust speed as needed
+  };
 
-    // Fallback: Try to trigger wheel event for zoom
-    const svg = treeContainer?.querySelector('svg') as SVGElement;
-    if (svg) {
-      const wheelEvent = new WheelEvent('wheel', {
-        deltaY: 100, // Positive for zoom out
-        bubbles: true,
-        cancelable: true
-      });
-      svg.dispatchEvent(wheelEvent);
-      console.log('Triggered synthetic wheel event for zoom out');
+  const stopHoldScroll = () => {
+    if (scrollIntervalRef.current) {
+      clearInterval(scrollIntervalRef.current);
+      scrollIntervalRef.current = null;
     }
   };
 
@@ -197,7 +186,7 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
         {/* Close button */}
         <button
           className="family-tree-modal-close-btn"
-          onClick={props.onClose}
+          onClick={onClose}
           aria-label="Close fullscreen family tree"
         >
           &times;
@@ -209,7 +198,11 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
           <div className="navigation-arrows">
             <button
               className="nav-btn nav-btn-up"
-              onClick={() => handleNavigate('up')}
+              onMouseDown={() => startHoldScroll('up')}
+              onMouseUp={stopHoldScroll}
+              onMouseLeave={stopHoldScroll}
+              onTouchStart={() => startHoldScroll('up')}
+              onTouchEnd={stopHoldScroll}
               aria-label="Pan up"
               title="Pan up"
             >
@@ -218,7 +211,11 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
             <div className="nav-horizontal">
               <button
                 className="nav-btn nav-btn-left"
-                onClick={() => handleNavigate('left')}
+                onMouseDown={() => startHoldScroll('left')}
+                onMouseUp={stopHoldScroll}
+                onMouseLeave={stopHoldScroll}
+                onTouchStart={() => startHoldScroll('left')}
+                onTouchEnd={stopHoldScroll}
                 aria-label="Pan left"
                 title="Pan left"
               >
@@ -234,7 +231,11 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
               </button>
               <button
                 className="nav-btn nav-btn-right"
-                onClick={() => handleNavigate('right')}
+                onMouseDown={() => startHoldScroll('right')}
+                onMouseUp={stopHoldScroll}
+                onMouseLeave={stopHoldScroll}
+                onTouchStart={() => startHoldScroll('right')}
+                onTouchEnd={stopHoldScroll}
                 aria-label="Pan right"
                 title="Pan right"
               >
@@ -243,7 +244,11 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
             </div>
             <button
               className="nav-btn nav-btn-down"
-              onClick={() => handleNavigate('down')}
+              onMouseDown={() => startHoldScroll('down')}
+              onMouseUp={stopHoldScroll}
+              onMouseLeave={stopHoldScroll}
+              onTouchStart={() => startHoldScroll('down')}
+              onTouchEnd={stopHoldScroll}
               aria-label="Pan down"
               title="Pan down"
             >
@@ -283,9 +288,20 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
           className="family-tree-scrollable-container"
         >
           <FamilyTree
-            {...props}
+            familyMembers={familyMembers}
+            relationships={relationships}
+            onDeleteMember={onDeleteMember}
+            onSelectMember={onSelectMember}
+            selectedMember={selectedMember}
+            onDeleteRelationship={onDeleteRelationship}
+            onAddMember={onAddMember}
+            onAddRelatedMember={onAddRelatedMember}
+            onAddExistingRelationship={onAddExistingRelationship}
+            onEditMember={onEditMember}
+            firstMember={firstMember}
             externalPan={externalPan}
-            onCloseTreeView={props.onClose}
+            externalZoom={externalZoom}
+            onCloseTreeView={onClose}
           />
         </div>
       </div>
