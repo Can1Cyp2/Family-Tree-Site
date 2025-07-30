@@ -16,6 +16,8 @@ interface FamilyTreeProps {
   onCloseTreeView?: () => void; // close handler
   onClosePopup?: () => void; // Callback to close popup
   firstMember?: FamilyMember | null; // Track the first member created
+  isPreview?: boolean; // New prop for preview mode
+  externalPan?: { dx: number; dy: number } | null;
 }
 
 interface TreeNode {
@@ -45,7 +47,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   onEditMember,
   onCloseTreeView,
   onClosePopup,
-  firstMember
+  firstMember,
+  externalPan,
+  isPreview = false // Default to false
 }) => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -58,7 +62,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   const svgRef = useRef<SVGSVGElement>(null);
   const miniMapRef = useRef<SVGSVGElement>(null);
   const [showMiniMap, setShowMiniMap] = useState(true);
-  const [miniMapDragging, setMiniMapDragging] = useState(false);
+  const [miniMapDragging, setMiniMapDragging] = useState(false);  
 
   // Layout constants
   const CARD_WIDTH = 180;
@@ -76,6 +80,16 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   const MINI_MAP_CARD_WIDTH = 6;
   const MINI_MAP_CARD_HEIGHT = 4;
 
+  // Handle external pan
+  useEffect(() => {
+  if (externalPan) {
+    setPan(prev => ({
+      x: prev.x + externalPan.dx,
+      y: prev.y + externalPan.dy,
+    }));
+    }
+  }, [externalPan]);
+
   // Handle window resize
   useEffect(() => {
     const handleResize = () => {
@@ -89,6 +103,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
   // Attach wheel event as non-passive to prevent page scroll
   useEffect(() => {
+    if (isPreview) return; // Disable wheel in preview mode
     const svg = svgRef.current;
     if (!svg) return;
     const wheelHandler = (e: WheelEvent) => {
@@ -100,7 +115,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     return () => {
       svg.removeEventListener('wheel', wheelHandler);
     };
-  }, []);
+  }, [isPreview]);
 
   // Build relationship maps
   const relationshipMap = useMemo(() => {
@@ -963,15 +978,17 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
   // Handle mouse events for pan and zoom
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (isPreview) return; // Disable pan in preview mode
     const target = e.target as Element;
     if (target === svgRef.current || target.tagName === 'svg') {
       setIsDragging(true);
       setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
       e.preventDefault();
     }
-  }, [pan]);
+  }, [pan, isPreview]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (isPreview) return; // Disable pan in preview mode
     if (isDragging) {
       e.preventDefault();
       setPan({
@@ -979,20 +996,23 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         y: e.clientY - dragStart.y
       });
     }
-  }, [isDragging, dragStart]);
+  }, [isDragging, dragStart, isPreview]);
 
   const handleMouseUp = useCallback(() => {
+    if (isPreview) return; // Disable pan in preview mode
     setIsDragging(false);
-  }, []);
+  }, [isPreview]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (isPreview) return; // Disable zoom in preview mode
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     setZoom(prev => Math.max(0.1, Math.min(3, prev * delta)));
-  }, []);
+  }, [isPreview]);
 
   // Handle touch events for mobile
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (isPreview) return; // Disable pan in preview mode
     const target = e.target as Element;
     // Only handle touch events on the SVG background, not on member cards
     if (target === svgRef.current || target.tagName === 'svg') {
@@ -1005,13 +1025,15 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         });
       }
     }
-  }, [pan]);
+  }, [pan, isPreview]);
 
   const handleTouchEnd = useCallback(() => {
+    if (isPreview) return; // Disable pan in preview mode
     setIsDragging(false);
-  }, []);
+  }, [isPreview]);
 
   useEffect(() => {
+    if (isPreview) return; // Disable pan in preview mode
     const svg = svgRef.current;
     if (!svg) return;
     const handler = (e: TouchEvent) => {
@@ -1025,9 +1047,10 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     };
     svg.addEventListener('touchmove', handler, { passive: false });
     return () => svg.removeEventListener('touchmove', handler);
-  }, [isDragging, dragStart]);
+  }, [isDragging, dragStart, isPreview]);
 
-  const handleMemberClick = (member: FamilyMember, event: React.MouseEvent | React.TouchEvent) => {
+  const handleMemberClick = useCallback((member: FamilyMember, event: React.MouseEvent | React.TouchEvent) => {
+    if (isPreview) return; // Disable clicks in preview mode
     // Stop propagation to prevent SVG touch events from interfering
     event.stopPropagation();
     event.preventDefault();
@@ -1090,7 +1113,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     setPopupPosition({ x: popupLeft, y: popupTop });
     setShowMemberPopup(member);
     onSelectMember(member);
-  };
+  }, [isPreview, onSelectMember]);
 
   const closePopup = () => {
     setShowMemberPopup(null);
@@ -1235,9 +1258,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   }
 
   return (
-    <div className="family-tree-container">
+    <div className="family-tree-container" style={{ pointerEvents: isPreview ? 'none' : 'auto' }}>
       {/* Mobile close button */}
-      {isMobile && (
+      {isMobile && !isPreview && (
         <button
           className="treeview-close-btn"
           onClick={() => {
@@ -1255,54 +1278,56 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           ×
         </button>
       )}
-      <div className="family-tree-controls">
-        <button
-          onClick={() => setZoom(prev => Math.min(3, prev * 1.2))}
-          className="control-button"
-        >
-          Zoom In
-        </button>
-        <button
-          onClick={() => setZoom(prev => Math.max(0.1, prev * 0.8))}
-          className="control-button"
-        >
-          Zoom Out
-        </button>
-        <button
-          onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
-          className="control-button secondary"
-        >
-          Reset View
-        </button>
-        {firstMember && (
+      {!isPreview && (
+        <div className="family-tree-controls">
           <button
-            onClick={() => {
-              const firstMemberNode = treeNodes.find(n => n.member.id === firstMember.id);
-              if (firstMemberNode) {
-                const container = document.querySelector('.family-tree-container') as HTMLElement;
-                if (container) {
-                  const containerRect = container.getBoundingClientRect();
-                  const centerX = containerRect.width / 2;
-                  const centerY = containerRect.height / 2;
-                  
-                  setPan({
-                    x: centerX - firstMemberNode.x,
-                    y: centerY - firstMemberNode.y
-                  });
-                  setZoom(1.2);
-                }
-              }
-            }}
-            className="control-button secondary"
-            title={`Center on ${firstMember.first_name} ${firstMember.last_name} (first member)`}
+            onClick={() => setZoom(prev => Math.min(3, prev * 1.2))}
+            className="control-button"
           >
-            Center on First Member
+            Zoom In
           </button>
-        )}
-      </div>
+          <button
+            onClick={() => setZoom(prev => Math.min(0.1, prev * 0.8))}
+            className="control-button"
+          >
+            Zoom Out
+          </button>
+          <button
+            onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
+            className="control-button secondary"
+          >
+            Reset View
+          </button>
+          {firstMember && (
+            <button
+              onClick={() => {
+                const firstMemberNode = treeNodes.find(n => n.member.id === firstMember.id);
+                if (firstMemberNode) {
+                  const container = document.querySelector('.family-tree-container') as HTMLElement;
+                  if (container) {
+                    const containerRect = container.getBoundingClientRect();
+                    const centerX = containerRect.width / 2;
+                    const centerY = containerRect.height / 2;
+                    
+                    setPan({
+                      x: centerX - firstMemberNode.x,
+                      y: centerY - firstMemberNode.y
+                    });
+                    setZoom(1.2);
+                  }
+                }
+              }}
+              className="control-button secondary"
+              title={`Center on ${firstMember.first_name} ${firstMember.last_name} (first member)`}
+            >
+              Center on First Member
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Mini Map */}
-      {!isMobile && showMiniMap && treeNodes.length > 0 && (
+      {!isMobile && showMiniMap && !isPreview && treeNodes.length > 0 && (
         <div className="mini-map-container" style={{
           position: 'absolute',
           bottom: '20px',

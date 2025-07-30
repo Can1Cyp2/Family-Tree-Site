@@ -20,9 +20,10 @@ interface FamilyTreeModalProps {
 }
 
 const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
+  const [externalPan, setExternalPan] = useState<{ dx: number; dy: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   // Reduced from 200 to 50 for more controlled movement
-  const MOVE_AMOUNT = 50;
+  const MOVE_AMOUNT = 10;
   // Alternative: You can make it adaptive based on container size
   // const MOVE_AMOUNT = containerRef.current ? Math.min(containerRef.current.clientWidth * 0.1, 100) : 50;
 
@@ -34,11 +35,11 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
       // Add keyboard navigation - only if not focused on an input/button
       const activeElement = document.activeElement;
       const isInputFocused = activeElement && (
-        activeElement.tagName === 'INPUT' || 
-        activeElement.tagName === 'BUTTON' || 
+        activeElement.tagName === 'INPUT' ||
+        activeElement.tagName === 'BUTTON' ||
         activeElement.tagName === 'TEXTAREA'
       );
-      
+
       if (!isInputFocused) {
         if (event.key === 'ArrowLeft') {
           event.preventDefault();
@@ -77,68 +78,24 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
     const treeContainer = findFamilyTreeContainer();
     if (!treeContainer) return;
 
-    const svg = treeContainer.querySelector('svg') as SVGElement;
-    if (!svg) return;
-
-    // Calculate move amount based on container size for better UX
     const containerRect = treeContainer.getBoundingClientRect();
-    const adaptiveMoveAmount = Math.min(MOVE_AMOUNT, containerRect.width * 0.1);
+    const MOVE_AMOUNT = Math.min(50, containerRect.width * 0.1);
 
-    let deltaX = 0;
-    let deltaY = 0;
+    let dx = 0, dy = 0;
 
     switch (direction) {
-      case 'left':
-        deltaX = adaptiveMoveAmount;
-        break;
-      case 'right':
-        deltaX = -adaptiveMoveAmount;
-        break;
-      case 'up':
-        deltaY = adaptiveMoveAmount;
-        break;
-      case 'down':
-        deltaY = -adaptiveMoveAmount;
-        break;
+      case 'left': dx = MOVE_AMOUNT; break;
+      case 'right': dx = -MOVE_AMOUNT; break;
+      case 'up': dy = MOVE_AMOUNT; break;
+      case 'down': dy = -MOVE_AMOUNT; break;
     }
 
-    // Get the center of the SVG
-    const rect = svg.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
+    setExternalPan({ dx, dy });
 
-    // Simulate mouse down, move, and up events to trigger panning
-    const mouseDownEvent = new MouseEvent('mousedown', {
-      clientX: centerX,
-      clientY: centerY,
-      bubbles: true,
-      cancelable: true
-    });
-
-    const mouseMoveEvent = new MouseEvent('mousemove', {
-      clientX: centerX + deltaX,
-      clientY: centerY + deltaY,
-      bubbles: true,
-      cancelable: true
-    });
-
-    const mouseUpEvent = new MouseEvent('mouseup', {
-      clientX: centerX + deltaX,
-      clientY: centerY + deltaY,
-      bubbles: true,
-      cancelable: true
-    });
-
-    // Dispatch the events in sequence
-    svg.dispatchEvent(mouseDownEvent);
+    // Reset after a tick to avoid re-triggering
     setTimeout(() => {
-      svg.dispatchEvent(mouseMoveEvent);
-      setTimeout(() => {
-        svg.dispatchEvent(mouseUpEvent);
-      }, 10);
-    }, 10);
-
-    console.log('Triggered pan event:', direction, { deltaX, deltaY, adaptiveMoveAmount });
+      setExternalPan(null);
+    }, 50);
   };
 
   const handleNavigate = (direction: 'left' | 'right' | 'up' | 'down') => {
@@ -150,7 +107,7 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
     const treeContainer = findFamilyTreeContainer();
     if (treeContainer) {
       const buttons = Array.from(treeContainer.querySelectorAll('button'));
-      const centerButton = buttons.find(btn => 
+      const centerButton = buttons.find(btn =>
         btn.textContent?.includes('Center on First Member') ||
         btn.textContent?.includes('Center') ||
         btn.title?.includes('Center')
@@ -163,7 +120,7 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
       }
 
       // Fallback: Try to find "Reset View" button
-      const resetButton = buttons.find(btn => 
+      const resetButton = buttons.find(btn =>
         btn.textContent?.includes('Reset View') ||
         btn.textContent?.includes('Reset')
       );
@@ -182,7 +139,7 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
     const treeContainer = findFamilyTreeContainer();
     if (treeContainer) {
       const buttons = Array.from(treeContainer.querySelectorAll('button'));
-      const zoomInButton = buttons.find(btn => 
+      const zoomInButton = buttons.find(btn =>
         btn.textContent?.includes('Zoom In')
       );
 
@@ -210,7 +167,7 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
     const treeContainer = findFamilyTreeContainer();
     if (treeContainer) {
       const buttons = Array.from(treeContainer.querySelectorAll('button'));
-      const zoomOutButton = buttons.find(btn => 
+      const zoomOutButton = buttons.find(btn =>
         btn.textContent?.includes('Zoom Out')
       );
 
@@ -238,8 +195,8 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
     <div className="family-tree-modal-overlay">
       <div className="family-tree-modal-content">
         {/* Close button */}
-        <button 
-          className="family-tree-modal-close-btn" 
+        <button
+          className="family-tree-modal-close-btn"
           onClick={props.onClose}
           aria-label="Close fullscreen family tree"
         >
@@ -250,7 +207,7 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
         <div className="family-tree-navigation-controls">
           {/* Directional Navigation */}
           <div className="navigation-arrows">
-            <button 
+            <button
               className="nav-btn nav-btn-up"
               onClick={() => handleNavigate('up')}
               aria-label="Pan up"
@@ -259,7 +216,7 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
               ↑
             </button>
             <div className="nav-horizontal">
-              <button 
+              <button
                 className="nav-btn nav-btn-left"
                 onClick={() => handleNavigate('left')}
                 aria-label="Pan left"
@@ -267,7 +224,7 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
               >
                 ←
               </button>
-              <button 
+              <button
                 className="nav-btn nav-btn-center"
                 onClick={handleCenterView}
                 aria-label="Center view"
@@ -275,7 +232,7 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
               >
                 ⌂
               </button>
-              <button 
+              <button
                 className="nav-btn nav-btn-right"
                 onClick={() => handleNavigate('right')}
                 aria-label="Pan right"
@@ -284,7 +241,7 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
                 →
               </button>
             </div>
-            <button 
+            <button
               className="nav-btn nav-btn-down"
               onClick={() => handleNavigate('down')}
               aria-label="Pan down"
@@ -296,7 +253,7 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
 
           {/* Quick Zoom Controls */}
           <div className="zoom-controls">
-            <button 
+            <button
               className="nav-btn zoom-btn"
               onClick={handleZoomIn}
               aria-label="Zoom in"
@@ -304,7 +261,7 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
             >
               +
             </button>
-            <button 
+            <button
               className="nav-btn zoom-btn"
               onClick={handleZoomOut}
               aria-label="Zoom out"
@@ -321,12 +278,13 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = (props) => {
         </div>
 
         {/* Family Tree Container */}
-        <div 
+        <div
           ref={containerRef}
           className="family-tree-scrollable-container"
         >
-          <FamilyTree 
-            {...props} 
+          <FamilyTree
+            {...props}
+            externalPan={externalPan}
             onCloseTreeView={props.onClose}
           />
         </div>

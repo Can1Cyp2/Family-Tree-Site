@@ -1,0 +1,247 @@
+/* FamilyTreeModal.css */
+
+.family-tree-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 0; /* Remove padding to allow full screen */
+}
+
+.family-tree-modal-content {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  max-width: none; /* Remove max-width constraint */
+  max-height: none; /* Remove max-height constraint */
+  background: white;
+  border-radius: 0; /* Remove border radius for true fullscreen */
+  overflow: hidden;
+  box-shadow: none; /* Remove shadow for fullscreen effect */
+}
+
+.family-tree-modal-close-btn {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid #e5e7eb;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 24px;
+  font-weight: bold;
+  color: #374151;
+  cursor: pointer;
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.family-tree-modal-close-btn:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  transform: scale(1.05);
+}
+
+.family-tree-modal-close-btn:active {
+  transform: scale(0.95);
+}
+
+/* Ensure the family tree component fills the modal */
+.family-tree-modal-content .family-tree-container {
+  width: 100%;
+  height: 100%;
+  border-radius: 0; /* Remove border radius */
+}
+
+/* Override any existing fullscreen styles in the family tree */
+.family-tree-modal-content .family-tree-container.family-tree-fullscreen {
+  position: relative;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: auto;
+}
+
+/* Navigation Controls */
+.family-tree-navigation-controls {
+  position: absolute;
+  top: 120px; /* Adjusted for fullscreen */
+  left: 20px;
+  z-index: 1001;
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.navigation-arrows {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.nav-horizontal {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.nav-btn {
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+  font-weight: bold;
+  color: #374151;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  user-select: none;
+}
+
+.nav-btn:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  transform: scale(1.05);
+}
+
+.nav-btn:active {
+  transform: scale(0.95);
+  background: #e5e7eb;
+}
+
+.nav-btn-center {
+  background: rgba(59, 130, 246, 0.95);
+  border-color: #3b82f6;
+  color: white;
+}
+
+.nav-btn-center:hover {
+  background: rgba(37, 99, 235, 0.95);
+  border-color: #2563eb;
+}
+
+.zoom-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.zoom-btn {
+  background: rgba(16, 185, 129, 0.95);
+  border-color: #10b981;
+  color: white;
+  font-size: 20px;
+}
+
+.zoom-btn:hover {
+  background: rgba(5, 150, 105, 0.95);
+  border-color: #059669;
+}
+
+/* Navigation Instructions */
+.navigation-instructions {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  z-index: 1001;
+  pointer-events: none;
+}
+
+/* Transform container for the family tree */
+.family-tree-transform-container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Scale indicator */
+.scale-indicator {
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: bold;
+  min-width: 50px;
+  text-align: center;
+}
+
+/* Scrollable container for the family tree */
+.family-tree-scrollable-container {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  scroll-behavior: smooth;
+}
+
+/* Ensure controls are visible in modal */
+.family-tree-modal-content .family-tree-controls {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 1001;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .family-tree-modal-overlay {
+    padding: 0;
+  }
+  
+  .family-tree-modal-content {
+    border-radius: 0;
+    width: 100vw;
+    height: 100vh;
+  }
+  
+  .family-tree-modal-close-btn {
+    top: 10px;
+    right: 10px;
+    width: 35px;
+    height: 35px;
+    font-size: 20px;
+  }
+
+  .family-tree-navigation-controls {
+    top: 60px;
+    left: 10px;
+    gap: 10px;
+  }
+
+  .nav-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+
+  .navigation-instructions {
+    bottom: 10px;
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+}
