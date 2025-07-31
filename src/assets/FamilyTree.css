@@ -26,6 +26,47 @@
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
+.family-tree-controls-right {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  gap: 10px;
+  z-index: 100;
+}
+
+.fullscreen-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #6366F1;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.fullscreen-button:hover {
+  background: #5B5FE3;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.fullscreen-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.fullscreen-button svg {
+  width: 16px;
+  height: 16px;
+}
+
 .control-button {
   padding: 8px 16px;
   border: 1px solid #d1d5db;
@@ -452,6 +493,20 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+  }
+    .family-tree-controls-right {
+    top: 70px; /* Position below the mobile close button */
+    right: 10px;
+  }
+  
+  .fullscreen-button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  
+  .fullscreen-button svg {
+    width: 14px;
+    height: 14px;
   }
   .family-tree-container ~ * {
     overflow: hidden;

@@ -13,12 +13,14 @@ interface FamilyTreeProps {
   onAddRelatedMember: (member: FamilyMember) => void;
   onAddExistingRelationship: (member: FamilyMember) => void;
   onEditMember: (member: FamilyMember) => void;
-  onCloseTreeView?: () => void; // close handler
   onClosePopup?: () => void; // Callback to close popup
   firstMember?: FamilyMember | null; // Track the first member created
   isPreview?: boolean; // New prop for preview mode
   externalPan?: { dx: number; dy: number } | null;
-  externalZoom?: number | null; // Add this line to fix the error
+  externalZoom?: number | null;
+  onFullscreen?: () => void; // Callback for fullscreen toggle
+  onClose?: () => void; // Callback for closing the tree view
+  isFullscreen?: boolean; //  prop for fullscreen mode
 }
 
 interface TreeNode {
@@ -46,12 +48,14 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   onAddRelatedMember,
   onAddExistingRelationship,
   onEditMember,
-  onCloseTreeView,
   onClosePopup,
   firstMember,
   externalPan,
   externalZoom,
-  isPreview = false // Default to false
+  isPreview = false, // Default to false
+  onFullscreen,
+  onClose,
+  isFullscreen = false, // prop for fullscreen mode
 }) => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -1279,8 +1283,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         <button
           className="treeview-close-btn"
           onClick={() => {
-            if (onCloseTreeView) {
-              onCloseTreeView();
+            if (onClose) {
+              onClose();
             } else {
               // Fallback: reset view if no close handler provided
               setZoom(1);
@@ -1294,51 +1298,70 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         </button>
       )}
       {!isPreview && (
-        <div className="family-tree-controls">
-          <button
-            onClick={() => applyZoomFactor(1.2)}
-            className="control-button"
-          >
-            Zoom In
-          </button>
-          <button
-            onClick={() => applyZoomFactor(0.9)}
-            className="control-button"
-          >
-            Zoom Out
-          </button>
-          <button
-            onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
-            className="control-button secondary"
-          >
-            Reset View
-          </button>
-          {firstMember && (
+        <>
+          {/* Left side controls: zoom in/out, reset view */}
+          <div className="family-tree-controls">
             <button
-              onClick={() => {
-                const firstMemberNode = treeNodes.find(n => n.member.id === firstMember.id);
-                if (firstMemberNode) {
-                  const container = document.querySelector('.family-tree-container') as HTMLElement;
-                  if (container) {
-                    const containerRect = container.getBoundingClientRect();
-                    const centerX = containerRect.width / 2;
-                    const centerY = containerRect.height / 2;
-
-                    setPan({
-                      x: centerX - firstMemberNode.x,
-                      y: centerY - firstMemberNode.y
-                    });
-                    setZoom(1.2);
-                  }
-                }
-              }}
-              className="control-button secondary"
-              title={`Center on ${firstMember.first_name} ${firstMember.last_name} (first member)`}
+              onClick={() => applyZoomFactor(1.2)}
+              className="control-button"
             >
-              Center on First Member
+              Zoom In
             </button>
+            <button
+              onClick={() => applyZoomFactor(0.9)}
+              className="control-button"
+            >
+              Zoom Out
+            </button>
+            <button
+              onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
+              className="control-button secondary"
+            >
+              Reset View
+            </button>
+            {firstMember && (
+              <button
+                onClick={() => {
+                  const firstMemberNode = treeNodes.find(n => n.member.id === firstMember.id);
+                  if (firstMemberNode) {
+                    const container = document.querySelector('.family-tree-container') as HTMLElement;
+                    if (container) {
+                      const containerRect = container.getBoundingClientRect();
+                      const centerX = containerRect.width / 2;
+                      const centerY = containerRect.height / 2;
+
+                      setPan({
+                        x: centerX - firstMemberNode.x,
+                        y: centerY - firstMemberNode.y
+                      });
+                      setZoom(1.2);
+                    }
+                  }
+                }}
+                className="control-button secondary"
+                title={`Center on ${firstMember.first_name} ${firstMember.last_name} (first member)`}
+              >
+                Center on First Member
+              </button>
+            )}
+          </div>
+
+          {/* Fullscreen button on the right */}
+          {!isFullscreen && onFullscreen && (
+            <div className="family-tree-controls-right">
+              <button
+                onClick={onFullscreen}
+                className="control-button fullscreen-button"
+                title="Open in fullscreen view"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                </svg>
+                Fullscreen
+              </button>
+            </div>
           )}
-        </div>
+        </>
       )}
 
       {/* Mini Map */}
