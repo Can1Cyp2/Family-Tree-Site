@@ -228,9 +228,8 @@ const AddRelationForm: React.FC<AddRelationFormProps> = ({
     // 3. PARENT RELATIONSHIPS - Only create the specific parent-child relationship requested
     if (relationshipType === 'parent') {
       
-      // Only create the specific parent-child relationship that was requested
+      // Only create the specific parent-child relationship that
       // Don't automatically make the new parent a parent to all siblings
-      // This prevents creating incorrect relationships
       
     }
 

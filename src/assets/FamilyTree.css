@@ -465,6 +465,79 @@
   margin: 0;
 }
 
+.first-member {
+  box-shadow: 0 0 0 3px #f59e0b !important;
+}
+
+.maternal-side {
+  filter: sepia(20%) hue-rotate(200deg);
+}
+
+.paternal-side {
+  filter: sepia(20%) hue-rotate(45deg);
+}
+
+.shared-descendant {
+  border: 2px dashed #6366F1 !important;
+}
+
+.family-tree-container .maternal-side {
+  filter: sepia(10%) hue-rotate(240deg) brightness(1.05);
+}
+
+.family-tree-container .paternal-side {
+  filter: sepia(10%) hue-rotate(45deg) brightness(1.05);
+}
+
+.family-tree-container .shared-descendant {
+  box-shadow: 0 0 0 2px #8B5CF6 !important;
+}
+
+.family-tree-container .step-family {
+  opacity: 0.85;
+  filter: grayscale(20%);
+}
+
+.family-tree-container .step-family::after {
+  content: 'Step';
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #F59E0B;
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: bold;
+}
+
+/* Connection line styles for different family sides */
+.connection-parent.maternal {
+  stroke: #8B5CF6;
+  stroke-width: 2.5;
+}
+
+.connection-parent.paternal {
+  stroke: #06B6D4;
+  stroke-width: 2.5;
+}
+
+.connection-parent.shared {
+  stroke: #6366F1;
+  stroke-width: 3;
+}
+
+/* Enhanced connection styles */
+.connection-parent.maternal {
+  stroke: #8B5CF6;
+  stroke-width: 3;
+}
+
+.connection-parent.paternal {
+  stroke: #06B6D4;
+  stroke-width: 3;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   body.tree-view-active {

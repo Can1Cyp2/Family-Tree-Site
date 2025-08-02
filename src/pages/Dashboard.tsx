@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import FamilyTree from '../components/FamilyTree';
-import FamilyTreeModal from '../components/FamilyTreeModal'; // Import the modal
+import FamilyTreeModal from '../components/FamilyTreeModal';
 import AddFamilyMemberForm from '../components/AddFamilyMemberForm';
 import AddRelationForm from '../components/AddRelationForm';
 import EditMemberForm from '../components/EditMemberForm';
@@ -23,7 +23,7 @@ const Dashboard: React.FC = () => {
   const [selectedFamilyMember, setSelectedFamilyMember] = useState<FamilyMember | null>(null);
   const [isFamilyTreeFullscreen, setIsFamilyTreeFullscreen] = useState(false);
 
-  // Get the first member created (member with earliest created_at timestamp)
+  // Get the first member created (member with earliest created_at timestamp):
   const firstMember = familyMembers.length > 0 ? familyMembers[0] : null;
 
   useEffect(() => {
@@ -75,7 +75,7 @@ const Dashboard: React.FC = () => {
   };
 
   const handleRelationAdded = (data: FamilyMember | Relationship) => {
-    // After adding a new member/relation, re-fetch all data
+    // After adding a new member/relation, refetch all data
     fetchData();
     setShowAddRelationFormMode('none');
     setSelectedFamilyMember(null); // Clear selection after adding a relation
@@ -188,10 +188,10 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Handle closing fullscreen modal
+  // Handle closing fullscreen modal:
   const handleCloseFullscreen = () => {
     setIsFamilyTreeFullscreen(false);
-    // Optionally clear selection when exiting fullscreen
+    // Maybe add later: clear selection when exiting fullscreen
     // setSelectedFamilyMember(null);
   };
 
