@@ -93,7 +93,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (user) {
           signOut();
         } //sign out after 1 day:
-      }, 86400000); // 1 day
+      }, 10800000); // 3 hours in milliseconds
     };
 
     const activityEvents = [

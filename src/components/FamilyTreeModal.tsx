@@ -44,7 +44,7 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = ({
       if (event.key === 'Escape') {
         onClose();
       }
-      // Add keyboard navigation - only if not focused on an input/button
+      // Add keyboard navigation: only if not focused on an input/button
       const activeElement = document.activeElement;
       const isInputFocused = activeElement && (
         activeElement.tagName === 'INPUT' ||
@@ -124,7 +124,7 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = ({
   };
 
   const handleCenterView = () => {
-    // Try to find and click the existing "Center on First Member" button first
+    // to find and click the existing "Center on First Member" button first
     const treeContainer = findFamilyTreeContainer();
     if (treeContainer) {
       const buttons = Array.from(treeContainer.querySelectorAll('button'));

@@ -198,7 +198,7 @@ const D3FamilyTree = forwardRef<D3FamilyTreeRef, D3FamilyTreeProps>(({
       .append('path')
       .attr('class', 'link')
       .attr('d', (d: any) => {
-        const linkGen = d3.linkHorizontal()
+        const linkGen = d3.linkVertical()
           .x((d: any) => d.x)
           .y((d: any) => d.y);
         return linkGen(d);
