@@ -136,9 +136,8 @@ const D3FamilyTree = forwardRef<D3FamilyTreeRef, D3FamilyTreeProps>(({
       }
     },
     zoomBy: (k: number) => {
-      if (svgD3Ref.current && zoomBehaviorRef.current) {
-        const width = 800;
-        const height = 600;
+      if (svgD3Ref.current && zoomBehaviorRef.current && svgRef.current) {
+        const { width, height } = svgRef.current.getBoundingClientRect();
         const [centerX, centerY] = [width / 2, height / 2];
         svgD3Ref.current.transition().duration(200).call((zoomBehaviorRef.current as any).scaleBy, k, [centerX, centerY]);
       }
@@ -158,8 +157,7 @@ const D3FamilyTree = forwardRef<D3FamilyTreeRef, D3FamilyTreeProps>(({
 
     const svg = d3.select(svgRef.current);
     svgD3Ref.current = svg;
-    const width = 800;
-    const height = 600;
+    const { width, height } = svgRef.current.getBoundingClientRect();
 
     // Set up the tree layout
     const treeLayout = d3.tree<D3Node>()
