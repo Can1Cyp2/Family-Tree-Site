@@ -135,60 +135,154 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     setZoom(prev => Math.max(0.1, Math.min(3, prev * factor)));
   };
 
-  const assignGenerations = (nodes: TreeNode[]) => {
-    const visited = new Set<string>();
+  // Enhanced generation assignment that handles both connected families and step families
+  const assignGenerations = (allNodes: TreeNode[], referenceNode?: TreeNode) => {
+    console.log('=== STARTING MULTI-GROUP GENERATION ASSIGNMENT ===');
 
-    // Start with nodes that have no parents (root generation)
-    const rootNodes = nodes.filter(n => n.parents.length === 0);
-
-    // If no root nodes, find the oldest nodes
-    if (rootNodes.length === 0) {
-      const sortedByAge = [...nodes].sort((a, b) => {
-        const aDate = a.member.birth_date || '1900-01-01';
-        const bDate = b.member.birth_date || '1900-01-01';
-        return aDate.localeCompare(bDate);
-      });
-      rootNodes.push(sortedByAge[0]);
-    }
-
-    // BFS to assign generations
-    const queue: { node: TreeNode; generation: number }[] = [];
-    rootNodes.forEach(node => {
-      node.generation = 0;
-      queue.push({ node, generation: 0 });
-      visited.add(node.member.id);
+    // Clear any existing generation assignments
+    allNodes.forEach(node => {
+      node.generation = 0; // Start everyone at generation 0
     });
 
-    while (queue.length > 0) {
-      const { node, generation } = queue.shift()!;
+    // Step 1: Identify all connected family groups (preserving original step family logic)
+    const familyGroups: TreeNode[][] = [];
+    const globalVisited = new Set<string>();
 
-      // Assign same generation to siblings and spouses
-      [...node.siblings, ...node.spouses].forEach(related => {
-        if (!visited.has(related.member.id)) {
-          related.generation = generation;
-          queue.push({ node: related, generation });
-          visited.add(related.member.id);
-        }
-      });
+    allNodes.forEach((node) => {
+      if (!globalVisited.has(node.member.id)) {
+        const group: TreeNode[] = [];
+        const queue = [node];
+        globalVisited.add(node.member.id);
 
-      // Assign next generation to children
-      node.children.forEach(child => {
-        if (!visited.has(child.member.id)) {
-          child.generation = generation + 1;
-          queue.push({ node: child, generation: generation + 1 });
-          visited.add(child.member.id);
-        }
-      });
+        // Use the same connection logic as the original code
+        while (queue.length > 0) {
+          const current = queue.shift()!;
+          group.push(current);
 
-      // Assign previous generation to parents
-      node.parents.forEach(parent => {
-        if (!visited.has(parent.member.id)) {
-          parent.generation = generation - 1;
-          queue.push({ node: parent, generation: generation - 1 });
-          visited.add(parent.member.id);
+          [...current.parents, ...current.children, ...current.spouses, ...current.siblings]
+            .forEach((related) => {
+              if (related && !globalVisited.has(related.member.id)) {
+                globalVisited.add(related.member.id);
+                queue.push(related);
+              }
+            });
         }
-      });
-    }
+        familyGroups.push(group);
+      }
+    });
+
+    console.log(`Found ${familyGroups.length} separate family groups:`,
+      familyGroups.map((group, index) => ({
+        groupIndex: index,
+        members: group.map(n => n.member.first_name),
+        size: group.length
+      }))
+    );
+
+    // Step 2: Assign generations within each family group separately
+    familyGroups.forEach((group, groupIndex) => {
+      console.log(`\n=== Processing Family Group ${groupIndex} ===`);
+
+      // Find the best starting node for this group
+      let startNode: TreeNode | undefined;
+
+      // If this group contains the reference node (first member), start there
+      if (referenceNode) {
+        startNode = group.find(n => n.member.id === referenceNode.member.id);
+      }
+
+      // If no reference node in this group, find a good starting point
+      if (!startNode) {
+        // Prefer nodes with no parents (root nodes)
+        const rootNodes = group.filter(n => n.parents.length === 0);
+        if (rootNodes.length > 0) {
+          startNode = rootNodes[0];
+        } else {
+          // Fallback to oldest member in this group
+          const sortedByAge = [...group].sort((a, b) => {
+            const aDate = a.member.birth_date || '1900-01-01';
+            const bDate = b.member.birth_date || '1900-01-01';
+            return aDate.localeCompare(bDate);
+          });
+          startNode = sortedByAge[0];
+        }
+      }
+
+      if (!startNode) {
+        console.warn(`No starting node found for group ${groupIndex}`);
+        return;
+      }
+
+      // Assign generations within this group using breadth-first search
+      const visited = new Set<string>();
+      const generationQueue: Array<{ node: TreeNode, generation: number }> = [];
+
+      startNode.generation = 0; // This group starts at generation 0
+      generationQueue.push({ node: startNode, generation: 0 });
+      visited.add(startNode.member.id);
+
+      console.log(`Starting group ${groupIndex} generation assignment from ${startNode.member.first_name}`);
+
+      while (generationQueue.length > 0) {
+        const { node, generation } = generationQueue.shift()!;
+
+        // Process all family connections within this group
+        const processRelatedNode = (related: TreeNode, targetGeneration: number, relationship: string) => {
+          if (!group.some(n => n.member.id === related.member.id)) {
+            // Skip nodes that aren't in this family group
+            return;
+          }
+
+          if (!visited.has(related.member.id)) {
+            related.generation = targetGeneration;
+            generationQueue.push({ node: related, generation: targetGeneration });
+            visited.add(related.member.id);
+            console.log(`  Assigned ${related.member.first_name} to generation ${targetGeneration} (${relationship} of ${node.member.first_name})`);
+          } else if (related.generation !== targetGeneration) {
+            // Handle generation conflicts by prioritizing sibling relationships
+            if (relationship === 'sibling' || relationship === 'spouse') {
+              console.warn(`  Generation conflict resolved: ${related.member.first_name} moved from generation ${related.generation} to ${targetGeneration} (${relationship} relationship takes precedence)`);
+              related.generation = targetGeneration;
+            }
+          }
+        };
+
+        // CRITICAL: Siblings must be in the same generation (this fixes Bryan/Terry)
+        node.siblings.forEach(sibling => {
+          processRelatedNode(sibling, generation, 'sibling');
+        });
+
+        // Spouses must be in the same generation
+        node.spouses.forEach(spouse => {
+          processRelatedNode(spouse, generation, 'spouse');
+        });
+
+        // Children go down one generation
+        node.children.forEach(child => {
+          processRelatedNode(child, generation + 1, 'child');
+        });
+
+        // Parents go up one generation
+        node.parents.forEach(parent => {
+          processRelatedNode(parent, generation - 1, 'parent');
+        });
+      }
+
+      console.log(`Group ${groupIndex} generation assignments:`,
+        group.map(n => `${n.member.first_name}: gen ${n.generation}`)
+      );
+    });
+
+    // Step 3: Debug output for final generation assignments
+    console.log('\n=== FINAL GENERATION ASSIGNMENTS BY GROUP ===');
+    familyGroups.forEach((group, groupIndex) => {
+      console.log(`Group ${groupIndex}:`, group.map(n => `${n.member.first_name}(gen ${n.generation})`));
+    });
+
+    console.log('=== MULTI-GROUP GENERATION ASSIGNMENT COMPLETE ===');
+
+    // Return the family groups for later use in step family positioning
+    return familyGroups;
   };
 
   // Build relationship maps
@@ -286,6 +380,89 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       }
     });
 
+    // GLOBAL COUPLE UNIT CREATION - This makes couple information available to all functions
+    const coupleUnits = new Map<string, string>(); // Maps each person to their spouse's ID
+    const bloodRelativeSet = new Set<string>(); // Track confirmed blood relatives
+    const processedCouples = new Set<string>(); // Prevents duplicate processing
+
+    // First, identify clear blood relatives across the entire family tree
+    Array.from(nodeMap.values()).forEach(node => {
+      const hasParents = node.parents.length > 0;
+      const hasChildren = node.children.length > 0;
+      const hasSiblings = node.siblings.length > 0;
+
+      if (hasParents || hasChildren || hasSiblings) {
+        bloodRelativeSet.add(node.member.id);
+        console.log(`Enhanced: Identified ${node.member.first_name} as blood relative`);
+      }
+    });
+
+    // Second pass - ensure all siblings of blood relatives are also marked as blood relatives
+    Array.from(nodeMap.values()).forEach(node => {
+      if (bloodRelativeSet.has(node.member.id)) {
+        // Mark all siblings as blood relatives too
+        node.siblings.forEach(sibling => {
+          bloodRelativeSet.add(sibling.member.id);
+          console.log(`Enhanced: Added sibling ${sibling.member.first_name} as blood relative`);
+        });
+      }
+    });
+
+    // Create couple units that respect sibling relationships
+    Array.from(nodeMap.values()).forEach(node => {
+      node.spouses.forEach(spouse => {
+        // Create a unique couple identifier to prevent duplicate processing
+        const coupleKey = [node.member.id, spouse.member.id].sort().join('-');
+        if (processedCouples.has(coupleKey)) return;
+        processedCouples.add(coupleKey);
+
+        const nodeIsBlood = bloodRelativeSet.has(node.member.id);
+        const spouseIsBlood = bloodRelativeSet.has(spouse.member.id);
+
+        // Don't create spouse units between siblings
+        const areSiblings = node.siblings.some(sib => sib.member.id === spouse.member.id) ||
+          spouse.siblings.some(sib => sib.member.id === node.member.id);
+
+        if (areSiblings) {
+          console.log(`PREVENTED: ${node.member.first_name} and ${spouse.member.first_name} are siblings, not spouses`);
+          return; // Skip creating a couple unit for siblings
+        }
+
+        // Only create couple units for actual spouses (not siblings)
+        if (nodeIsBlood || spouseIsBlood) {
+          // Both become "family unit members" regardless of blood status
+          bloodRelativeSet.add(node.member.id);
+          bloodRelativeSet.add(spouse.member.id);
+
+          // Establish the couple bond
+          coupleUnits.set(node.member.id, spouse.member.id);
+          coupleUnits.set(spouse.member.id, node.member.id);
+
+          // Determine which one is the "anchor" (blood relative) and which is "spouse"
+          if (nodeIsBlood && !spouseIsBlood) {
+            spouse.isSpouse = true;
+            spouse.spouseOf = node;
+            console.log(`Enhanced: Created couple unit ${node.member.first_name} (anchor) + ${spouse.member.first_name} (spouse)`);
+          } else if (!nodeIsBlood && spouseIsBlood) {
+            node.isSpouse = true;
+            node.spouseOf = spouse;
+            console.log(`Enhanced: Created couple unit ${spouse.member.first_name} (anchor) + ${node.member.first_name} (spouse)`);
+          } else {
+            // Both are blood relatives but NOT siblings: they can be a couple
+            if (node.generation <= spouse.generation) {
+              spouse.isSpouse = true;
+              spouse.spouseOf = node;
+              console.log(`Enhanced: Created couple unit ${node.member.first_name} (primary) + ${spouse.member.first_name} (partner)`);
+            } else {
+              node.isSpouse = true;
+              node.spouseOf = spouse;
+              console.log(`Enhanced: Created couple unit ${spouse.member.first_name} (primary) + ${node.member.first_name} (partner)`);
+            }
+          }
+        }
+      });
+    });
+
     // Find connected components (family groups)
     const familyGroups: TreeNode[][] = [];
     const visited = new Set<string>();
@@ -366,61 +543,37 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     }
 
     // Helper to create family units (siblings + their spouses)
-    function createFamilyUnits(nodes: TreeNode[]): TreeNode[][] {
+    function createFamilyUnitsImproved(nodes: TreeNode[]): TreeNode[][] {
       const familyUnits: TreeNode[][] = [];
       const processed = new Set<string>();
 
-      // Helper function to determine if someone is a blood relative
-      // only consider someone a blood relative if they have parents or children in this specific generation group
+      console.log('=== SIBLING-PRIORITY FAMILY UNIT CREATION ===');
+
+      // Enhanced blood relative detection that uses the global bloodRelativeSet
       const isBloodRelative = (node: TreeNode, withinNodes: TreeNode[]): boolean => {
-        // If they have children in this group, they're a blood relative
+        // If explicitly marked as spouse, they're not a blood relative in this context
+        if (node.isSpouse) return false;
+
+        // If explicitly identified as blood relative globally, they are one
+        if (bloodRelativeSet.has(node.member.id)) return true;
+
+        // Check family connections within this specific node group
         const hasChildrenInGroup = node.children.some(child =>
           withinNodes.some(n => n.member.id === child.member.id)
         );
 
-        // If they have parents in this group, they're a blood relative
         const hasParentsInGroup = node.parents.some(parent =>
           withinNodes.some(n => n.member.id === parent.member.id)
         );
 
-        // If they have siblings (same parents), they're blood relatives
-        const hasSiblings = node.siblings.length > 0;
+        const hasSiblingsInGroup = node.siblings.some(sibling =>
+          withinNodes.some(n => n.member.id === sibling.member.id)
+        );
 
-        return hasChildrenInGroup || hasParentsInGroup || hasSiblings;
+        return hasChildrenInGroup || hasParentsInGroup || hasSiblingsInGroup;
       };
 
-      // Helper to get all siblings including the node itself
-      const getAllSiblings = (node: TreeNode): TreeNode[] => {
-        const siblings = new Set<TreeNode>();
-        siblings.add(node);
-
-        // Add direct siblings
-        node.siblings.forEach(sib => siblings.add(sib));
-
-        // Also check if siblings have the same parents
-        const nodeParentIds = node.parents.map(p => p.member.id).sort().join('-');
-        if (nodeParentIds) {
-          nodes.forEach(otherNode => {
-            if (otherNode.member.id !== node.member.id) {
-              const otherParentIds = otherNode.parents.map(p => p.member.id).sort().join('-');
-              if (otherParentIds === nodeParentIds) {
-                siblings.add(otherNode);
-                // Make sure they know about each other as siblings
-                if (!node.siblings.includes(otherNode)) {
-                  node.siblings.push(otherNode);
-                }
-                if (!otherNode.siblings.includes(node)) {
-                  otherNode.siblings.push(node);
-                }
-              }
-            }
-          });
-        }
-
-        return Array.from(siblings);
-      };
-
-      // Sort nodes to process blood relatives first
+      // Sort nodes to prioritize blood relatives and their sibling groups
       const sortedNodes = [...nodes].sort((a, b) => {
         const aIsBlood = isBloodRelative(a, nodes);
         const bIsBlood = isBloodRelative(b, nodes);
@@ -429,118 +582,105 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         if (aIsBlood && !bIsBlood) return -1;
         if (!aIsBlood && bIsBlood) return 1;
 
-        // Among blood relatives, those with more relationships first
+        // Among blood relatives, those with more sibling connections first
         if (aIsBlood && bIsBlood) {
-          const aScore = a.parents.length + a.siblings.length + a.children.length;
-          const bScore = b.parents.length + b.siblings.length + b.children.length;
+          const aSiblingCount = a.siblings.length;
+          const bSiblingCount = b.siblings.length;
+          if (aSiblingCount !== bSiblingCount) return bSiblingCount - aSiblingCount;
+
+          // If sibling counts are equal, use relationship count
+          const aScore = a.parents.length + a.children.length;
+          const bScore = b.parents.length + b.children.length;
           return bScore - aScore;
         }
 
-        // Among non-blood relatives, those with children first (potential family roots)
+        // Among non-blood relatives, those with children first
         return b.children.length - a.children.length;
       });
 
       sortedNodes.forEach(node => {
         if (processed.has(node.member.id)) return;
 
-        const nodeIsBlood = isBloodRelative(node, nodes);
-
-        // If this person is not a blood relative in this generation group, check if they should be treated as a spouse
-        if (!nodeIsBlood) {
-          // Check if any of their spouses are blood relatives who haven't been processed
-          const unprocessedBloodSpouse = node.spouses.find(spouse =>
-            isBloodRelative(spouse, nodes) && !processed.has(spouse.member.id)
-          );
-
-          if (unprocessedBloodSpouse) {
-            // Skip this node for now, it will be processed when we process their blood relative spouse
-            return;
-          }
-        }
-
-        console.log(`Processing ${node.member.first_name} as family root (blood relative in this group: ${nodeIsBlood})`);
-
-        // Start a new family unit with this node and all their siblings
+        // Start new family unit
         const familyUnit: TreeNode[] = [];
 
-        // Always process siblings together, regardless of blood relative status
-        const allSiblings = getAllSiblings(node);
-        console.log(`Found siblings for ${node.member.first_name}:`, allSiblings.map(s => s.member.first_name));
+        // PRIORITY 1: Add the node and all their siblings first (keeping siblings together)
+        const getAllSiblings = (centerNode: TreeNode): TreeNode[] => {
+          const siblings = new Set<TreeNode>();
+          siblings.add(centerNode);
 
-        // Add all siblings to the family unit:
-        allSiblings.forEach(sibling => {
-          if (!processed.has(sibling.member.id)) {
-            familyUnit.push(sibling);
-            processed.add(sibling.member.id);
-          }
-        });
+          centerNode.siblings.forEach(sib => siblings.add(sib));
 
-        // Now add spouses for everyone in the family unit
-        const spousesToAdd: TreeNode[] = [];
-        familyUnit.forEach(member => {
-          member.spouses.forEach(spouse => {
-            if (!processed.has(spouse.member.id)) {
-              // Check if the spouse is a blood relative in THIS specific group
-              const spouseIsBloodInGroup = isBloodRelative(spouse, nodes);
-
-              // If the spouse has their own siblings in this group, they should be processed with them
-              const spouseHasSiblingsInGroup = spouse.siblings.some(sib =>
-                nodes.some(n => n.member.id === sib.member.id && !processed.has(sib.member.id))
-              );
-
-              if (spouseIsBloodInGroup && spouseHasSiblingsInGroup) {
-                console.log(`Skipping ${spouse.member.first_name} - they have siblings to be processed with`);
-                return; // Skip this spouse, they'll be processed with their siblings
+          // Also check for same-parent siblings to ensure we don't miss any
+          const nodeParentIds = centerNode.parents.map(p => p.member.id).sort().join('-');
+          if (nodeParentIds) {
+            nodes.forEach(otherNode => {
+              if (otherNode.member.id !== centerNode.member.id) {
+                const otherParentIds = otherNode.parents.map(p => p.member.id).sort().join('-');
+                if (otherParentIds === nodeParentIds) {
+                  siblings.add(otherNode);
+                }
               }
-
-              // Otherwise, add them as a spouse
-              console.log(`Adding ${spouse.member.first_name} as spouse of ${member.member.first_name}`);
-              spouse.isSpouse = true;
-              spouse.spouseOf = member;
-              spousesToAdd.push(spouse);
-              processed.add(spouse.member.id);
-            }
-          });
-        });
-
-        // Add all the spouses to the family unit
-        familyUnit.push(...spousesToAdd);
-
-        // Sort the family unit to position members correctly
-        familyUnit.sort((a, b) => {
-          // Blood relatives come first, then their spouses
-          const aIsSpouse = a.isSpouse || false;
-          const bIsSpouse = b.isSpouse || false;
-
-          if (!aIsSpouse && bIsSpouse) return -1;
-          if (aIsSpouse && !bIsSpouse) return 1;
-
-          // If both are spouses, ensure they're positioned next to their blood relative
-          if (aIsSpouse && bIsSpouse) {
-            // Find their positions based on their spouseOf
-            const aSpouseOfIndex = familyUnit.findIndex(m => m.member.id === a.spouseOf?.member.id);
-            const bSpouseOfIndex = familyUnit.findIndex(m => m.member.id === b.spouseOf?.member.id);
-
-            if (aSpouseOfIndex !== -1 && bSpouseOfIndex !== -1) {
-              return aSpouseOfIndex - bSpouseOfIndex;
-            }
+            });
           }
 
-          // Among blood relatives, sort by birth date
-          const aDate = a.member.birth_date || '1900-01-01';
-          const bDate = b.member.birth_date || '1900-01-01';
-          return aDate.localeCompare(bDate);
+          return Array.from(siblings);
+        };
+
+        const allSiblings = getAllSiblings(node);
+        const unprocessedSiblings = allSiblings.filter(sib => !processed.has(sib.member.id));
+
+        // Add all unprocessed siblings to the family unit
+        unprocessedSiblings.forEach(sibling => {
+          familyUnit.push(sibling);
+          processed.add(sibling.member.id);
+          console.log(`Added sibling ${sibling.member.first_name} to family unit`);
         });
 
-        familyUnits.push(familyUnit);
+        // PRIORITY 2: After siblings are grouped, add their spouses
+        unprocessedSiblings.forEach(sibling => {
+          const spouseId = coupleUnits.get(sibling.member.id);
+          const spouse = spouseId ? nodes.find(n => n.member.id === spouseId) : null;
+
+          if (spouse && !processed.has(spouse.member.id)) {
+            familyUnit.push(spouse);
+            processed.add(spouse.member.id);
+            console.log(`Added ${sibling.member.first_name}'s spouse ${spouse.member.first_name} to family unit`);
+          }
+        });
+
+        if (familyUnit.length > 0) {
+          // Sort family unit to keep siblings together and place spouses adjacent to their partners
+          familyUnit.sort((a, b) => {
+            const aIsSpouse = a.isSpouse;
+            const bIsSpouse = b.isSpouse;
+
+            // Blood relatives (siblings) come first, then their spouses
+            if (!aIsSpouse && bIsSpouse) return -1;
+            if (aIsSpouse && !bIsSpouse) return 1;
+
+            // Among blood relatives, sort by birth date to maintain natural sibling order
+            if (!aIsSpouse && !bIsSpouse) {
+              const aDate = a.member.birth_date || '1900-01-01';
+              const bDate = b.member.birth_date || '1900-01-01';
+              return aDate.localeCompare(bDate);
+            }
+
+            // Among spouses, maintain relative positioning
+            return 0;
+          });
+
+          familyUnits.push(familyUnit);
+          console.log(`Created sibling-priority family unit:`, familyUnit.map(m =>
+            `${m.member.first_name}${m.isSpouse ? ' (spouse)' : ''}`
+          ));
+        }
       });
 
-      console.log('Family units created:', familyUnits.map(unit =>
-        unit.map(member => `${member.member.first_name} (isSpouse: ${member.isSpouse}, spouseOf: ${member.spouseOf?.member.first_name || 'none'})`)
-      ));
-
+      console.log('=== SIBLING-PRIORITY FAMILY UNIT CREATION COMPLETE ===');
       return familyUnits;
     }
+
 
     // Recursive layout for a sibling group
     const layoutSiblingGroup = (siblings: TreeNode[], depth: number, xOffset: number): { width: number, centers: number[] } => {
@@ -713,7 +853,10 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         }
 
         sib.x = sibCenter;
-        sib.y = depth * VERTICAL_SPACING + 100;
+
+        // This prevents spatial concerns from overriding family relationships
+        sib.y = sib.generation * VERTICAL_SPACING + 100;
+        console.log(`Positioned ${sib.member.first_name} at generation ${sib.generation} (Y: ${sib.y})`);
         centers.push(sibCenter);
       });
 
@@ -723,7 +866,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           // Position spouse immediately adjacent to their blood relative
           const spouseX = spouse.spouseOf.x - (CARD_WIDTH / 2) - (SPOUSE_SPACING / 3); // Much closer than other cards
           spouse.x = spouseX;
-          spouse.y = spouse.spouseOf.y; // Same y position
+          // Ensure spouses are also positioned at their correct generation
+          spouse.y = spouse.generation * VERTICAL_SPACING + 100;
+          console.log(`Positioned spouse ${spouse.member.first_name} at generation ${spouse.generation} (Y: ${spouse.y})`);
 
           console.log(`Positioned spouse ${spouse.member.first_name} next to ${spouse.spouseOf.member.first_name} at (${Math.round(spouseX)}, ${Math.round(spouse.y)})`);
         }
@@ -731,6 +876,13 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
       return { width: totalWidth, centers };
     };
+
+    // Assign generations FIRST before any layout positioning:
+    // This ensures family relationships take precedence over spatial concerns
+    const firstMemberNode = firstMember ? Array.from(nodeMap.values()).find(n => n.member.id === firstMember.id) : undefined;
+    const familyGroupsFromGeneration = assignGenerations(Array.from(nodeMap.values()), firstMemberNode);
+
+    console.log('=== GENERATION ASSIGNMENT COMPLETE - STARTING LAYOUT ===');
 
     // Main layout for each family group
     familyGroups.forEach((group, groupIndex) => {
@@ -829,7 +981,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         group.map(n => `${n.member.first_name} -> parents: [${n.parents.map(p => p.member.first_name).join(', ')}]`));
 
       // Create family units from the roots
-      const familyUnits = createFamilyUnits(roots);
+      const familyUnits = createFamilyUnitsImproved(roots);
       let groupWidth = 0;
       familyUnits.forEach((familyUnit, idx) => {
         const { width } = layoutSiblingGroup(familyUnit, 0, totalLayoutWidth + groupWidth);
@@ -992,17 +1144,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             }
           });
 
-          // Add spouses and their lineages (but be careful about the other core parent)
-          startNode.spouses.forEach(spouse => {
-            if (!visited.has(spouse.member.id)) {
-              // Don't include the other core parent in either lineage
-              if (spouse.member.id !== maternalParent.member.id &&
-                spouse.member.id !== paternalParent.member.id) {
-                lineage.push(...collectFamilyLineage(spouse, visited, excludeSharedDescendants));
-              }
-            }
-          });
-
           return lineage;
         };
 
@@ -1042,7 +1183,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           } else if (hasPaternalParent) {
             paternalOnlyDescendants.push(descendant);
           } else {
-            // This descendant doesn't have either core parent - keep them with their actual parent
+            // This descendant doesn't have either core parent, keep them with their actual parent
             // Find which lineage their actual parents belong to
             let belongsToMaternal = false;
             let belongsToPaternal = false;
@@ -1077,30 +1218,46 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         const maternalOffset = desiredMaternalX - maternalParent.x;
         const paternalOffset = desiredPaternalX - paternalParent.x;
 
-        // Move maternal lineage and their descendants
+        // Function to move a person and automatically move their spouse with them
+        const moveCoupleUnit = (person: TreeNode, offsetX: number, offsetY: number = 0, logContext: string) => {
+          // Move the person
+          person.x += offsetX;
+          person.y += offsetY;
+
+          // Check if they have a spouse that needs to move with them using global couple data
+          const spouseId = coupleUnits.get(person.member.id);
+          const spouse = spouseId ? Array.from(nodeMap.values()).find(n => n.member.id === spouseId) : null;
+
+          if (spouse) {
+            // Move the spouse to maintain their relative position
+            spouse.x += offsetX;
+            spouse.y += offsetY;
+            console.log(`${logContext}: Moved couple unit ${person.member.first_name} + ${spouse.member.first_name}`);
+          } else {
+            console.log(`${logContext}: Moved individual ${person.member.first_name}`);
+          }
+        };
+
+        // Move maternal lineage and their descendants AS COUPLE UNITS
         [...maternalLineage, ...maternalOnlyDescendants].forEach(node => {
           if (node.member.id !== rootNode.member.id) { // Don't move the root
-            node.x += maternalOffset;
-            console.log(`Moved ${node.member.first_name} to maternal side`);
+            moveCoupleUnit(node, maternalOffset, 0, "Maternal side");
           }
         });
 
-        // Move paternal lineage and their descendants  
+        // Move paternal lineage and their descendants AS COUPLE UNITS  
         [...paternalLineage, ...paternalOnlyDescendants].forEach(node => {
           if (node.member.id !== rootNode.member.id) { // Don't move the root
-            node.x += paternalOffset;
-            console.log(`Moved ${node.member.first_name} to paternal side`);
+            moveCoupleUnit(node, paternalOffset, 0, "Paternal side");
           }
         });
 
-        // Keep shared descendants centered between parents (don't move them much)
+        // Handle shared descendants with couple-aware gentle adjustment
         const centerX = (desiredMaternalX + desiredPaternalX) / 2;
         sharedDescendants.forEach(descendant => {
-          // Only adjust if they're significantly off-center
-          if (Math.abs(descendant.x - centerX) > 200) {
-            const adjustment = (centerX - descendant.x) * 0.3; // Gentle adjustment
-            descendant.x += adjustment;
-            console.log(`Gently adjusted shared descendant ${descendant.member.first_name} toward center`);
+          if (!descendant.isSpouse && Math.abs(descendant.x - centerX) > 200) {
+            const adjustment = (centerX - descendant.x) * 0.3;
+            moveCoupleUnit(descendant, adjustment, 0, "Shared descendant adjustment");
           }
         });
 
@@ -1191,7 +1348,83 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       });
     }
 
-    return Array.from(nodeMap.values());
+    const finalNodes = Array.from(nodeMap.values());
+    finalNodes.forEach(node => {
+      if (node.isSpouse && node.spouseOf) {
+        // Re-position spouse next to their blood relative after any family moves
+        const spouseX = node.spouseOf.x - (CARD_WIDTH / 2) - (SPOUSE_SPACING / 3);
+        node.x = spouseX;
+        node.y = node.spouseOf.y;
+        console.log(`FINAL: Re-positioned spouse ${node.member.first_name} next to ${node.spouseOf.member.first_name} at (${Math.round(spouseX)}, ${Math.round(node.y)})`);
+      }
+    });
+
+
+
+    // STEP 5: Enhanced spouse positioning that runs after ALL layout operations
+    const ensureAllSpousesProperlyPositioned = (allNodes: TreeNode[]) => {
+      console.log('=== FINAL SPOUSE POSITIONING CHECK ===');
+
+      // First, validate that all couples are still together
+      const couplesToFix: Array<{ spouse: TreeNode, anchor: TreeNode }> = [];
+
+      allNodes.forEach(node => {
+        if (node.isSpouse && node.spouseOf) {
+          const anchor = node.spouseOf;
+          const distance = Math.abs(node.x - anchor.x);
+
+          // If they're more than a reasonable distance apart, they need fixing
+          if (distance > 300) { // 300 pixels is our "couple separation threshold"
+            couplesToFix.push({ spouse: node, anchor: anchor });
+            console.log(`COUPLE SEPARATION DETECTED: ${node.member.first_name} is ${distance}px away from ${anchor.member.first_name}`);
+          }
+        }
+      });
+
+      // Fix any separated couples
+      couplesToFix.forEach(({ spouse, anchor }) => {
+        // Use the same side-by-side logic we discussed earlier
+        const shouldPositionLeft = determineSidePreference(spouse, anchor);
+        const SIDE_BY_SIDE_GAP = 12;
+
+        let spouseX: number;
+        if (shouldPositionLeft) {
+          spouseX = anchor.x - CARD_WIDTH - SIDE_BY_SIDE_GAP;
+        } else {
+          spouseX = anchor.x + CARD_WIDTH + SIDE_BY_SIDE_GAP;
+        }
+
+        spouse.x = spouseX;
+        spouse.y = anchor.y;
+
+        console.log(`COUPLE REUNION: Repositioned ${spouse.member.first_name} next to ${anchor.member.first_name} at (${Math.round(spouseX)}, ${Math.round(spouse.y)})`);
+      });
+
+      console.log('=== FINAL SPOUSE POSITIONING COMPLETE ===');
+    };
+
+    // Helper function for consistent side preference
+    function determineSidePreference(spouse: TreeNode, anchor: TreeNode): boolean {
+      if (spouse.member.gender === 'female' && anchor.member.gender === 'male') {
+        return true; // Female on left of male
+      }
+      if (spouse.member.gender === 'male' && anchor.member.gender === 'female') {
+        return false; // Male on right of female
+      }
+
+      // Age-based fallback
+      if (spouse.member.birth_date && anchor.member.birth_date) {
+        return spouse.member.birth_date < anchor.member.birth_date;
+      }
+
+      // Alphabetical fallback
+      return spouse.member.first_name.toLowerCase() < anchor.member.first_name.toLowerCase();
+    }
+
+    // Final spouse positioning after all other layout operations
+    ensureAllSpousesProperlyPositioned(finalNodes);
+
+    return finalNodes;
   }, [familyMembers, relationships, relationshipMap, firstMember]);
 
 
