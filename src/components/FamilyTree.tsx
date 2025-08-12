@@ -919,7 +919,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           node.children.length >= 2 &&                    // Has multiple children
           node.siblings.length === 0 &&                   // No siblings  
           node.spouses.length === 0 &&                    // No spouses
-          node.children.every(child =>                     // All children have siblings (form a sibling group)
+          node.children.every(child =>                    // All children have siblings (form a sibling group)
             child.siblings.length > 0 ||
             node.children.length > 1  // OR this parent has multiple children (making them siblings)
           )

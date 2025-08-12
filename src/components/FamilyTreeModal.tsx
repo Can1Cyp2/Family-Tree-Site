@@ -46,11 +46,12 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = ({
       }
       // Add keyboard navigation: only if not focused on an input/button
       const activeElement = document.activeElement;
-      const isInputFocused = activeElement && (
-        activeElement.tagName === 'INPUT' ||
-        activeElement.tagName === 'BUTTON' ||
-        activeElement.tagName === 'TEXTAREA'
-      );
+      const isInputFocused =
+        activeElement &&
+        (activeElement.tagName === 'INPUT' ||
+          activeElement.tagName === 'TEXTAREA' ||
+          (activeElement as HTMLElement).isContentEditable === true
+        );
 
       if (!isInputFocused) {
         if (event.key === 'ArrowLeft') {
@@ -112,7 +113,7 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = ({
 
   const triggerZoomEvent = (factor: number) => {
     setExternalZoom(factor);
-    
+
     // Reset after a tick to avoid re-triggering
     setTimeout(() => {
       setExternalZoom(null);
