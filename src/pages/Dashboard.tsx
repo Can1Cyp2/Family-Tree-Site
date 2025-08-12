@@ -389,6 +389,28 @@ const Dashboard: React.FC = () => {
           />
         )}
 
+        {/* Formatting help message - show when there are family members */}
+        {familyMembers.length > 0 && (
+          <div 
+            style={{
+              backgroundColor: '#f0f8ff',
+              border: '1px solid #b0d4f1',
+              borderRadius: '8px',
+              padding: '15px',
+              marginTop: '20px',
+              fontSize: '14px',
+              color: '#2c5aa0'
+            }}
+          >
+            <p style={{ margin: 0, fontStyle: 'italic' }}>
+              <strong>Tip:</strong> If your family tree is not formatted well, try checking your members' relationships. 
+              Adding or removing relationships can help change family member positions on the tree. 
+              This is a simple family tree maker with some formatting limitations, but with proper relationship 
+              configurations, typical family structures (including a step family) will work properly.
+            </p>
+          </div>
+        )}
+
         {familyMembers.length > 0 && (
           <div className="card">
             <h3>Family Members ({familyMembers.length})</h3>
