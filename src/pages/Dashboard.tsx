@@ -532,6 +532,7 @@ const Dashboard: React.FC = () => {
             }}
           >
             <div 
+            
               style={{
                 background: 'white',
                 color: 'black',
