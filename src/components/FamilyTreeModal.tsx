@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import FamilyTree from './FamilyTree';
 import { FamilyMember, Relationship } from '../types';
 import '../assets/FamilyTreeModal.css';
@@ -39,55 +39,14 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-      // Add keyboard navigation: only if not focused on an input/button
-      const activeElement = document.activeElement;
-      const isInputFocused =
-        activeElement &&
-        (activeElement.tagName === 'INPUT' ||
-          activeElement.tagName === 'TEXTAREA' ||
-          (activeElement as HTMLElement).isContentEditable === true
-        );
-
-      if (!isInputFocused) {
-        if (event.key === 'ArrowLeft') {
-          event.preventDefault();
-          handleNavigate('left');
-        } else if (event.key === 'ArrowRight') {
-          event.preventDefault();
-          handleNavigate('right');
-        } else if (event.key === 'ArrowUp') {
-          event.preventDefault();
-          handleNavigate('up');
-        } else if (event.key === 'ArrowDown') {
-          event.preventDefault();
-          handleNavigate('down');
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-
-    // Prevent body scroll when modal is open
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      // Restore body scroll when modal closes
-      document.body.style.overflow = 'unset';
-    };
-  }, [onClose]);
+  // Keydown handler for navigation and zoom is registered below after handlers are defined
 
   const findFamilyTreeContainer = (): HTMLElement | null => {
     if (!containerRef.current) return null;
     return containerRef.current.querySelector('.family-tree-container') as HTMLElement;
   };
 
-  const triggerPanEvent = (direction: 'left' | 'right' | 'up' | 'down') => {
+  const triggerPanEvent = useCallback((direction: 'left' | 'right' | 'up' | 'down') => {
     const treeContainer = findFamilyTreeContainer();
     if (!treeContainer) return;
 
@@ -109,20 +68,20 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = ({
     setTimeout(() => {
       setExternalPan(null);
     }, 50);
-  };
+  }, [setExternalPan]);
 
-  const triggerZoomEvent = (factor: number) => {
+  const triggerZoomEvent = useCallback((factor: number) => {
     setExternalZoom(factor);
 
     // Reset after a tick to avoid re-triggering
     setTimeout(() => {
       setExternalZoom(null);
     }, 50);
-  };
+  }, [setExternalZoom]);
 
-  const handleNavigate = (direction: 'left' | 'right' | 'up' | 'down') => {
+  const handleNavigate = useCallback((direction: 'left' | 'right' | 'up' | 'down') => {
     triggerPanEvent(direction);
-  };
+  }, [triggerPanEvent]);
 
   const handleCenterView = () => {
     // to find and click the existing "Center on First Member" button first
@@ -157,15 +116,15 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = ({
     console.log('No center button found');
   };
 
-  const handleZoomIn = () => {
+  const handleZoomIn = useCallback(() => {
     triggerZoomEvent(1.1); // Zoom in by 10%
     console.log('Zoom in triggered');
-  };
+  }, [triggerZoomEvent]);
 
-  const handleZoomOut = () => {
+  const handleZoomOut = useCallback(() => {
     triggerZoomEvent(0.9); // Zoom out by 10%
     console.log('Zoom out triggered');
-  };
+  }, [triggerZoomEvent]);
 
   const startHoldScroll = (direction: 'left' | 'right' | 'up' | 'down') => {
     triggerPanEvent(direction); // Initial move
@@ -180,6 +139,59 @@ const FamilyTreeModal: React.FC<FamilyTreeModalProps> = ({
       scrollIntervalRef.current = null;
     }
   };
+
+  // Register keydown listener for navigation, zoom, and closing
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+
+      // Add keyboard navigation: only if not focused on an input/button
+      const activeElement = document.activeElement;
+      const isInputFocused =
+        activeElement &&
+        (activeElement.tagName === 'INPUT' ||
+          activeElement.tagName === 'TEXTAREA' ||
+          (activeElement as HTMLElement).isContentEditable === true
+        );
+
+      if (!isInputFocused) {
+        if (event.key === 'ArrowLeft') {
+          event.preventDefault();
+          handleNavigate('left');
+        } else if (event.key === 'ArrowRight') {
+          event.preventDefault();
+          handleNavigate('right');
+        } else if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          handleNavigate('up');
+        } else if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          handleNavigate('down');
+        } else if (event.key === '=' || event.key === '+' || event.key === 'Add') {
+          // Zoom in ("=" or "+" keys, including numpad Add)
+          event.preventDefault();
+          handleZoomIn();
+        } else if (event.key === '-' || event.key === '_' || event.key === 'Subtract') {
+          // Zoom out ("-" or "_" keys, including numpad Subtract)
+          event.preventDefault();
+          handleZoomOut();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Prevent body scroll when modal is open
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      // Restore body scroll when modal closes
+      document.body.style.overflow = 'unset';
+    };
+  }, [onClose, handleNavigate, handleZoomIn, handleZoomOut]);
 
   return (
     <div className="family-tree-modal-overlay">
